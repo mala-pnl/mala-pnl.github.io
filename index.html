@@ -9034,11 +9034,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         return { name: r.name, type: r.type, url: r.url || '', url_set: !!r.url_set, key: '***', mapping: r.mapping, store_id: r.store_id, active: r.active };
       }
 
-      // 目前三種連接器類型都還沒有真的串接同步邏輯（本系統這一版只負責存
-      // 設定：URL／金鑰／對應），存檔本身不擋，只在畫面上標「尚未串接」，
-      // 呼應必修 #11「未實作的先允許存但標未啟用」。之後真的接上哪個類型
-      // 的同步邏輯，把那個類型從這個清單移掉即可。
-      var CONNECTOR_TYPES_NOT_IMPLEMENTED_ = { cashbook: 1, transfer: 1, payroll: 1 };
+      // 尚未實作同步邏輯的連接器類型（畫面標「尚未串接」）。cashbook／transfer／
+      // payroll 三種已於 PR #34（T15）實作並上線，故清單為空；日後新增類型但
+      // 還沒接上同步邏輯時，把該類型加進來即可。
+      var CONNECTOR_TYPES_NOT_IMPLEMENTED_ = {};
 
       function renderConnectorsSection(panel) {
         panel.appendChild(el('div', 'settings-section-title', '連接器'));
