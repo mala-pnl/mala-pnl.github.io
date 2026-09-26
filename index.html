@@ -3,6 +3,7 @@
 <head>
   <base target="_top">
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
   <script>try { if (top !== self) { top.location = self.location; } } catch (e) { document.documentElement.style.display = "none"; }</script>
@@ -161,6 +162,45 @@
   .btn-primary:active { background: var(--brand-dark); }
   .btn-primary:disabled { opacity: 0.55; cursor: default; }
 
+  /* v3：登入鈕轉圈（登入約需 6 秒，見 shell.html setLoginSubmitting）與
+     call() 超過 1.5 秒的頂列細進度條，共用同一組 @keyframes。 */
+  @keyframes pnl-spin { to { transform: rotate(360deg); } }
+
+  .btn-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 8px;
+    vertical-align: -2px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: pnl-spin 0.7s linear infinite;
+  }
+
+  .progress-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: rgba(35, 24, 21, 0.08);
+    overflow: hidden;
+    z-index: 70; /* 高於底部導覽列（55）／抽屜（60），永遠蓋在最上層 */
+  }
+
+  .progress-bar::before {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0; left: -30%;
+    width: 30%;
+    background: var(--brand);
+    animation: pnl-progress-slide 1s ease-in-out infinite;
+  }
+
+  @keyframes pnl-progress-slide {
+    0% { left: -30%; }
+    100% { left: 100%; }
+  }
+
   .login-error {
     color: var(--down);
     font-size: 13px;
@@ -257,9 +297,9 @@
     flex-shrink: 0;
   }
 
-  /* Fable 審查建議 8：<480px 先讓角色文字讓路，把寬度留給品牌名（見
-     .topbar-brand 的 ellipsis）；姓名本身仍然保留。 */
-  @media (max-width: 480px) {
+  /* v3（手機緊湊化，2026-09-26）：原本 <480px 才讓角色文字讓路，擴大到
+     <768px 整個手機斷點，姓名本身仍然保留（登出前總要知道自己是誰）。 */
+  @media (max-width: 767px) {
     .topbar-user-role { display: none; }
   }
 
@@ -273,7 +313,27 @@
     border-radius: 999px;
     padding: 6px 14px;
     font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
   }
+
+  /* v3：登出鈕手機版只留圖示（aria-label 補文字），電腦版維持純文字——
+     圖示節點一律存在於 DOM（shell.html 建立），只是用這兩個 class 互相
+     切換誰看得到，不是動態插拔 DOM。 */
+  .btn-logout-icon { display: none; }
+  .btn-logout-icon svg { width: 16px; height: 16px; }
+
+  /* v3：手機底部固定導覽列（<768px）。桌面一律不顯示——即使 DOM 存在
+     （renderShellDom 一律建立），.hidden 由 renderTabbar/renderBottomNav
+     依「可見頁籤是否 >1」決定要不要掛 hidden，這裡的 display:none 是
+     「電腦寬度無論如何都不顯示」這一層，跟 .hidden 各自負責一件事。 */
+  .bottom-nav { display: none; }
+
+  /* v3：儀表板手機版「下載 ▾」單一下拉，desktop 用回原本兩顆按鈕，兩者
+     互斥顯示（見下面 767px 媒體查詢）。 */
+  .download-select-mobile { display: none; }
 
   .body-row {
     flex: 1;
@@ -389,6 +449,15 @@
 
   @media (min-width: 768px) {
     .sidebar-backdrop { display: none; }
+
+    /* v3：設定頁頂部兩張卡在手機版包成一張可收合 <details>（見 css.html
+       max-width:767 那段與 settings.html buildTopCollapsible_），電腦版
+       強制「一律展開、拿掉可收合外觀」——同一份 DOM／JS，只靠 CSS 讓
+       <details> 表現得跟改版前的兩張獨立卡片完全一樣（不設 display 在
+       mobile 那邊，讓瀏覽器原生的 [open] 顯示/隱藏規則自然生效）。 */
+    .settings-top-collapsible { display: contents; }
+    .settings-top-collapsible > summary { display: none; }
+    .settings-top-collapsible > .settings-panel { display: block; }
   }
 
   @media (min-width: 1024px) {
@@ -1547,11 +1616,10 @@
     color: var(--ink-soft);
   }
 
-  /* 卡片本身較窄時（375 單欄仍可能較窄的裝置）數字略縮，避免逼近邊界；
-     clamp() 已經會自動縮，這裡再壓一次下限保險。 */
-  @media (max-width: 360px) {
-    .kpi-value .kpi-value-num { font-size: 24px; }
-  }
+  /* v3（2026-09-26）：<360px 的數字字級收窄規則已經併進下面
+     max-width:767px 那個手機斷點區塊（clamp(13px,4.6vw,18px)＋
+     overflow-wrap:anywhere，Fable 審查必修 3），這裡不再重複一份會被
+     後面規則覆蓋、形同虛設的舊值。 */
 
   @media (min-width: 640px) {
     .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1788,6 +1856,262 @@
     color: var(--ink-soft);
     font-weight: 600;
     margin-bottom: 2px;
+  }
+
+  /* =====================================================================
+     v3（2026-09-26）手機緊湊化：Eason 手機實測回饋「介面太大，要一直滑」，
+     目標「手機一頁就能預覽」。整段刻意收在 max-width:767px 底下——電腦版
+     （>=768）外觀完全不變，見 docs/screens/v3-*-1440-fold.png 前後比對。
+     ===================================================================== */
+  @media (max-width: 767px) {
+    :root {
+      --topbar-h: 48px; /* 原 56px；驗收要求 <=48px */
+      --bottomnav-h: 56px;
+    }
+
+    /* ---- 頂列：更矮、更窄的左右留白 ---- */
+    .topbar { padding: 0 10px; }
+    .topbar-brand { font-size: 15px; }
+
+    /* ---- 麵包屑手機隱藏 ---- */
+    .breadcrumb-bar { display: none; }
+
+    /* ---- 登出鈕：圖示按鈕，aria-label 補文字（見 shell.html） ---- */
+    .btn-logout {
+      min-width: 40px;
+      width: 40px;
+      padding: 0;
+      border-radius: 50%;
+    }
+    .btn-logout-text { display: none; }
+    .btn-logout-icon { display: inline-flex; }
+
+    /* ---- 底部固定導覽列：儀表板／填資料／匯入／設定，依角色顯示規則
+       跟側邊欄一致（renderBottomNav 共用 visibleTabs()）。只有 >1 個可見
+       頁籤時才顯示（跟 .tabbar 同一條規則，見 shell.html renderBottomNav），
+       hasTabs 用 has-tabs class 表達，不是每次都硬性 display:flex——單一
+       頁籤（例如檢視者只有儀表板）不需要導覽列佔掉螢幕高度。 ---- */
+    .bottom-nav.has-tabs {
+      display: flex;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 55;
+      height: calc(var(--bottomnav-h) + env(safe-area-inset-bottom));
+      padding-bottom: env(safe-area-inset-bottom);
+      background: var(--nav-bg);
+      box-shadow: 0 -1px 8px rgba(0, 0, 0, 0.18);
+    }
+
+    .bottom-nav-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      min-height: var(--tap-min);
+      padding: 4px 2px;
+      background: none;
+      border: none;
+      color: var(--nav-ink);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .bottom-nav-btn svg { width: 20px; height: 20px; }
+
+    .bottom-nav-btn[aria-selected="true"] { color: #fff; }
+
+    /* 手機不再需要漢堡抽屜（底部導覽列已經是主要入口），漢堡鈕保留在
+       頂列但刻意精簡：維持既有側邊欄/抽屜程式碼不動（換手機／平板橫向
+       仍可用），只是視覺上不再是主要動線。 */
+
+    /* ---- 內容區：間距整體縮小（padding 12px、卡片間距 10px、內文
+       14px）。底部留白只在「真的有底部導覽列」時才加——Fable 審查建議
+       6：檢視者只有 1 個頁籤（沒有底部導覽列，見 shell.html
+       renderBottomNav 的 body.has-bottom-nav），不該留 76px 空白，內容
+       可以用到螢幕最底部。 ---- */
+    .main {
+      padding: 12px 12px 20px;
+      font-size: 14px;
+    }
+    body.has-bottom-nav .main {
+      padding-bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom) + 20px);
+    }
+
+    .hero-card, .profit-card, .expense-card, .account-card, .entry-row,
+    .finalize-section, .tpl-summary, .preview-table, .warning-banner,
+    .tpl-editor-body, .accounts-table-card, .chart-card, .pending-card,
+    .trend-card, .settings-panel, .errors-card {
+      margin-bottom: 10px;
+    }
+
+    /* ---- 儀表板首屏：門市＋月份同一列縮窄，兩個「下載」按鈕合併成一顆
+       「下載 ▾」select（downloadPnlCsvBtn/downloadEntriesCsvBtn 仍在 DOM
+       裡負責實際下載邏輯與既有 e2e 選擇器，只是手機版改由 downloadSelect
+       觸發它們的 click，見 dashboard.html）。 ---- */
+    .filters { gap: 6px; }
+    .filters select { min-width: 0; flex: 1 1 40%; }
+    .filters .btn-secondary.csv-download-btn { display: none; }
+    .download-select-mobile {
+      display: block;
+      flex: 1 1 100%;
+      min-height: var(--tap-min);
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    /* ---- KPI 2x2：手機不畫大面積折線（kpi-sparkline），卡片縮小到剛好
+       放得下標題＋金額＋徽章＋佔比／較上月，四張卡不捲動就看得到。 ---- */
+    .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    /* Fable 審查必修 3：overflow:hidden——超長金額換行後（見下面
+       .kpi-value）若還是放不下，寧可卡片內部被裁掉，也不能撐破卡片邊界
+       疊到隔壁卡（卡片本身有背景色/陰影，裁切不會看起來破圖）。 */
+    .kpi-card { min-height: 0; padding: 10px; gap: 4px; overflow: hidden; }
+    .kpi-sparkline-wrap, .kpi-sparkline-empty { display: none; }
+    .kpi-badge-row { gap: 6px; }
+    .kpi-arrow-circle { width: 22px; height: 22px; font-size: 11px; }
+    .kpi-badge-text { font-size: 11px; }
+    .kpi-bottom { gap: 8px; margin-top: 0; }
+    .kpi-icon-box { width: 30px; height: 30px; border-radius: 8px; }
+    .kpi-icon-box svg { width: 15px; height: 15px; }
+    .kpi-text { min-width: 0; }
+    .kpi-label { font-size: 10px; }
+    /* Fable 審查必修 3：桌面版 .kpi-value 是 white-space:nowrap（見上面
+       非媒體查詢的基礎規則）——手機卡片窄很多，異常長的金額（例如
+       "NT$ −12,345,678.90"）不換行只會溢出卡片、蓋到右邊那張卡。手機
+       改允許換行＋overflow-wrap:anywhere（沒有空白可斷行時，長數字字串
+       仍然可以在任意字元處斷開），字級再收窄到 13–18px。 */
+    .kpi-value { white-space: normal; overflow-wrap: anywhere; }
+    .kpi-value .kpi-value-num { font-size: clamp(13px, 4.6vw, 18px); overflow-wrap: anywhere; }
+    .kpi-value .kpi-value-prefix { font-size: 12px; }
+    .kpi-pct-line { font-size: 10px; min-height: 13px; }
+    .kpi-sub-rows { min-height: 0; font-size: 10px; }
+    .kpi-sub-rows div { font-size: 10px; }
+
+    /* 手機可控/不可控/營業淨利三張改一列一張，緊接在 KPI 之下，維持
+       「不捲動就看到三行摘要」。 */
+    .expense-grid { grid-template-columns: 1fr; gap: 6px; }
+    .expense-card { padding: 10px 12px; min-height: 0; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+    .expense-card .name { font-size: 12px; }
+    .expense-card .amount { font-size: 18px; margin-top: 0; }
+    .expense-card .pct, .expense-card .delta { font-size: 11px; margin-top: 0; }
+
+    /* ---- 設定頁：頂部兩張卡合併成一張可收合卡（見 settings.html
+       buildTopCollapsible_，預設收合、native <details>/<summary>）。 ---- */
+    .settings-top-collapsible {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 4px 14px;
+      margin-bottom: 10px;
+    }
+    .settings-top-collapsible > summary {
+      list-style: none;
+      cursor: pointer;
+      min-height: var(--tap-min);
+      display: flex;
+      align-items: center;
+      font-weight: 700;
+      font-size: 14px;
+      padding: 10px 0;
+    }
+    .settings-top-collapsible > summary::-webkit-details-marker { display: none; }
+    .settings-top-collapsible > summary::before { content: '▸ '; color: var(--ink-soft); }
+    .settings-top-collapsible[open] > summary::before { content: '▾ '; }
+    .settings-top-collapsible > .settings-panel { box-shadow: none; padding: 10px 0 4px; margin-bottom: 0; }
+    .settings-top-collapsible > .settings-panel + .settings-panel { border-top: 1px dashed var(--line); }
+
+    /* 小分頁列 sticky 在頁面頂端（頂列本身不是 fixed，會隨頁面捲動離開
+       視窗，這裡 sticky 到視窗頂端 top:0，可橫向捲動維持不變）。 */
+    .settings-nav {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: var(--bg);
+      margin: 0 -12px 12px;
+      padding: 8px 12px 4px;
+    }
+
+    /* ---- 設定頁的一般資料表格（門市／科目／使用者／連接器…）改卡片
+       列表；.accounts-table（儀表板科目明細）已經有自己一套帶 data-label
+       的卡片版型（見上面既有規則），這裡排除它避免重複套用兩次。 ---- */
+    .settings-panel .data-table:not(.accounts-table) { min-width: 0; }
+    .settings-panel .data-table:not(.accounts-table) thead { display: none; }
+    .settings-panel .data-table:not(.accounts-table),
+    .settings-panel .data-table:not(.accounts-table) tbody,
+    .settings-panel .data-table:not(.accounts-table) tr,
+    .settings-panel .data-table:not(.accounts-table) td {
+      display: block;
+      width: 100%;
+    }
+    .settings-panel .data-table:not(.accounts-table) tr {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+    }
+    .settings-panel .data-table:not(.accounts-table) td {
+      border-bottom: none;
+      padding: 4px 0;
+    }
+  }
+
+  /* Fable 審查建議 4：320x568（最小手機寬度）盡量把儀表板首屏塞進 fold——
+     再收窄 KPI 卡與摘要行的內距/間距幾 px。跟 max-width:767 那個大塊是
+     同一層級的斷點（不用巢狀 @media），沒塞進去的情況（很舊的機型、
+     極端瀏覽器字級設定）留 320 當可捲動例外，不强行把字級再壓更小犧牲
+     可讀性。 */
+  @media (max-width: 340px) {
+    .kpi-row { gap: 6px; }
+    .kpi-card { padding: 8px; gap: 3px; }
+    .kpi-bottom { gap: 6px; }
+    .expense-grid { gap: 4px; }
+    .expense-card { padding: 8px 10px; }
+  }
+
+  /* Fable 審查必修 1（iPhone 13 裝置模擬驗收）：Playwright 的 iPhone 13
+     裝置描述档 viewport 是 390x664（模擬 Safari 網址列吃掉的高度，比
+     螢幕原生 844 矮很多——這是實際部署後使用者會看到的可視高度，不是
+     測試工具的失真），比一般拿來量測的 375x812 矮了近 150px。用
+     max-height 斷點（而不是只靠寬度）再收一輪垂直間距，讓矮螢幕手機
+     （不限 iPhone，凡是可視高度 <=700px 的直向手機都適用）一樣能把
+     KPI／摘要塞進首屏。跟 max-width:767 一起夾，不影響橫向的平板／
+     桌面視窗。 */
+  @media (max-width: 767px) and (max-height: 700px) {
+    .kpi-row { gap: 6px; margin-bottom: 8px; }
+    .kpi-card { padding: 7px; gap: 2px; }
+    .kpi-badge-row { gap: 4px; }
+    .kpi-arrow-circle { width: 18px; height: 18px; font-size: 10px; }
+    .kpi-bottom { gap: 6px; }
+    .kpi-icon-box { width: 24px; height: 24px; border-radius: 6px; }
+    .kpi-icon-box svg { width: 12px; height: 12px; }
+    .kpi-label { font-size: 9px; }
+    .kpi-pct-line { min-height: 11px; font-size: 9px; }
+    .expense-grid { gap: 4px; margin-bottom: 8px; }
+    .expense-card { padding: 6px 10px; }
+    .expense-card .amount { font-size: 16px; }
+    /* 第二輪 Fable 審查：iPhone 13 模擬（390x664）用真實的
+       PNL_MOCK_DATA（含「全部合計」跨店比較註記）量測時，這兩行文字
+       （月份狀態、店家組成不同提示）長度不固定、換行後會多墊出十幾到
+       二十幾 px 的高度，讓 .expense-grid 的 bottom 卡在 fold 邊緣。矮螢幕
+       斷點下縮字級＋單行省略（超出的部分還是可以靠捲動看到完整文字，
+       只是首屏先給精簡版）。 */
+    .month-status, .mismatch-note {
+      font-size: 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .month-status { margin: -4px 0 6px; }
+    .mismatch-note { margin: -4px 0 6px; }
+    .filters { margin-bottom: 8px; }
   }
 </style>
 
@@ -3517,7 +3841,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     // reject({error,message})。每次呼叫都產生一個 client_id 給後端做寫入
     // 冪等判斷（見 generateClientId 與 gas/apiWrite.js withLock_），讀取類
     // action 後端會忽略這個欄位，不影響行為。 ----
-    function call(action, req) {
+    function callTransport_(action, req) {
       var clientId = generateClientId();
       var payload = Object.assign({ action: action, token: App.token, client_id: clientId }, req || {});
 
@@ -3563,6 +3887,56 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           }
           throw { error: 'BAD_INPUT', message: '系統錯誤，請稍後再試' };
         });
+    }
+
+    // ---- v3：慢速呼叫進度條——call() 超過 1.5 秒還沒回應時，頂列下緣顯示
+    // 一條細進度條（不擋互動，純視覺提示「還在處理」），回應或失敗都要
+    // 收掉。多個 call() 同時掛著（例如 dashboard.html 的 Promise.all）用
+    // 一個計數器管理，最後一個結束才真的隱藏，不會「先完成的那個」提早
+    // 把進度條關掉、其餘還在跑的那幾個變得沒有任何提示。 ----
+    var SLOW_CALL_THRESHOLD_MS = 1500;
+    var slowCallCount = 0;
+    function showProgressBar() {
+      var el = document.getElementById('progressBar');
+      if (el) el.classList.remove('hidden');
+    }
+    function hideProgressBar() {
+      var el = document.getElementById('progressBar');
+      if (el) el.classList.add('hidden');
+    }
+    function call(action, req) {
+      var fired = false;
+      var timer = setTimeout(function () {
+        fired = true;
+        slowCallCount++;
+        showProgressBar();
+      }, SLOW_CALL_THRESHOLD_MS);
+      function settle() {
+        clearTimeout(timer);
+        if (fired) {
+          slowCallCount = Math.max(0, slowCallCount - 1);
+          if (slowCallCount === 0) hideProgressBar();
+        }
+      }
+      // Fable 審查必修 7：callTransport_() 正常應該永遠回傳 Promise，但如果
+      // 它（或未來改壞了）同步 throw，原本的 .then() 鏈永遠不會被排進去，
+      // timer 就漏清——一旦 1.5 秒後真的 fired，進度條會卡住顯示到天荒地老
+      // （沒有人會再呼叫 settle()）。try/catch 包住「拿 promise」這一步：
+      // 同步 throw 時接住、轉成 rejected promise（原本的錯誤原封不動往上
+      // 游的 .catch() 送，不會被吃掉），跟正常的非同步失敗走同一條
+      // `.then(...,失敗handler)` 收尾，settle() 只在那裡呼叫一次——不論
+      // 走同步 throw 或非同步 resolve/reject 哪一條路，timer 保證都會被
+      // 清乾淨、不會漏、也不會被呼叫兩次。
+      var promise;
+      try {
+        promise = callTransport_(action, req);
+      } catch (syncErr) {
+        promise = Promise.reject(syncErr);
+      }
+      return promise.then(
+        function (data) { settle(); return data; },
+        function (err) { settle(); throw err; }
+      );
     }
     window.call = call;
 
@@ -3641,6 +4015,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       // 漢堡
       hamburger: function () {
         return lineIcon(['M4 6h16', 'M4 12h16', 'M4 18h16']);
+      },
+      // 登出：門＋箭頭（v3 手機版登出鈕改圖示按鈕用）
+      logout: function () {
+        return lineIcon(['M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4', 'M16 17l5-5-5-5', 'M21 12H9']);
       }
     };
 
@@ -3753,6 +4131,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     function showLogin(message) {
       storageRemove(TOKEN_KEY);
       storageRemove(SESSION_KEY);
+      document.body.classList.remove('has-bottom-nav'); // 登出時清掉，避免殘留影響登入畫面
       App.token = null;
       App.name = '';
       App.role = '';
@@ -3813,7 +4192,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         '      <label for="loginPass">通行碼</label>' +
         '      <input type="password" id="loginPass" name="pass" autocomplete="current-password" required>' +
         '    </div>' +
-        '    <button type="submit" class="btn-primary" id="loginSubmit">登入</button>' +
+        '    <button type="submit" class="btn-primary" id="loginSubmit"><span id="loginSubmitText">登入</span></button>' +
         '    <div class="login-error" id="loginError" role="alert"></div>' +
         '  </form>' +
         '  <div class="backend-footer hidden" id="backendFooter"></div>' +
@@ -3831,6 +4210,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         '  </div>' +
         '</div>' +
         '<div class="app-shell hidden" id="appShell">' +
+        '  <div class="progress-bar hidden" id="progressBar" role="progressbar" aria-label="處理中"></div>' +
         '  <div class="topbar" id="topbar">' +
         '    <div class="topbar-left">' +
         '      <button type="button" class="hamburger-btn" id="hamburgerBtn" aria-label="開啟選單"></button>' +
@@ -3838,7 +4218,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         '    </div>' +
         '    <div class="topbar-user">' +
         '      <span id="topbarUser"><span id="topbarUserName"></span><span id="topbarUserRole" class="topbar-user-role"></span></span>' +
-        '      <button class="btn-logout" id="logoutBtn" type="button">登出</button>' +
+        '      <button class="btn-logout" id="logoutBtn" type="button" aria-label="登出">' +
+        '        <span class="btn-logout-icon" id="logoutIcon"></span>' +
+        '        <span class="btn-logout-text">登出</span>' +
+        '      </button>' +
         '    </div>' +
         '  </div>' +
         '  <div class="body-row">' +
@@ -3851,11 +4234,13 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         '      <div class="main" id="main"></div>' +
         '    </div>' +
         '  </div>' +
+        '  <nav class="bottom-nav" id="bottomNav" aria-label="底部導覽" role="tablist"></nav>' +
         '</div>';
       // 上面這段 innerHTML 是純靜態字串（沒有任何變數插值），不是 XSS
       // 例外——見檔頭註解與 test/ui/xss.test.js。
 
       document.getElementById('loginForm').addEventListener('submit', onLoginSubmit);
+      document.getElementById('logoutIcon').appendChild(window.PnlIcon.logout());
       document.getElementById('logoutBtn').addEventListener('click', function () { logout(''); });
       document.getElementById('backendConfirmYes').addEventListener('click', function () {
         confirmBackend();
@@ -3879,13 +4264,33 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       applyBranding(App.system);
     }
 
+    // v3：登入約需 6 秒（真正部署的 GAS exec 冷啟動／驗證通行碼），按下
+    // 「登入」後看不到任何回饋很容易被以為當掉、被重複連點。送出中把按鈕
+    // 文字換成「登入中…」＋一個純 CSS 轉圈圖示，並停用按鈕；完成或失敗
+    // 都要還原成原本的「登入」文字（不能卡在「登入中…」）。
+    function setLoginSubmitting(submitting) {
+      var btn = document.getElementById('loginSubmit');
+      var textEl = document.getElementById('loginSubmitText');
+      if (!btn || !textEl) return;
+      btn.disabled = submitting;
+      if (submitting) {
+        textEl.textContent = '';
+        var spinner = document.createElement('span');
+        spinner.className = 'btn-spinner';
+        spinner.setAttribute('aria-hidden', 'true');
+        textEl.appendChild(spinner);
+        textEl.appendChild(document.createTextNode('登入中…'));
+      } else {
+        textEl.textContent = '登入';
+      }
+    }
+
     function onLoginSubmit(ev) {
       ev.preventDefault();
       var pass = document.getElementById('loginPass').value;
-      var btn = document.getElementById('loginSubmit');
       var errEl = document.getElementById('loginError');
       errEl.textContent = '';
-      btn.disabled = true;
+      setLoginSubmitting(true);
       call('login', { pass: pass })
         .then(function (data) {
           App.token = data.token;
@@ -3899,7 +4304,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         .catch(function (err) {
           errEl.textContent = errorMessage(err);
         })
-        .then(function () { btn.disabled = false; });
+        .then(function () { setLoginSubmitting(false); });
     }
 
     // ---- 頁籤：T07 只做「儀表板」；#9–#11 之後在這個清單各加一項，不用
@@ -3927,6 +4332,17 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
 
     var activeTabId = 'dashboard';
 
+    // 切頁的唯一入口：側邊欄（.tab-btn）與 v3 手機底部導覽列
+    // （.bottom-nav-btn）都呼叫這支，兩邊的 aria-selected 狀態才不會各自
+    // 維護、對不起來。
+    function selectTab(tabId) {
+      activeTabId = tabId;
+      renderTabbar();
+      renderBottomNav();
+      renderActiveTab();
+      closeSidebar(); // 手機版：點頁籤後自動收起抽屜
+    }
+
     function renderTabbar() {
       var bar = document.getElementById('tabbar');
       var tabs = visibleTabs();
@@ -3947,12 +4363,49 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         var labelSpan = document.createElement('span');
         labelSpan.textContent = t.label;
         btn.appendChild(labelSpan);
-        btn.addEventListener('click', function () {
-          activeTabId = t.id;
-          renderTabbar();
-          renderActiveTab();
-          closeSidebar(); // 手機版：點頁籤後自動收起抽屜
-        });
+        btn.addEventListener('click', function () { selectTab(t.id); });
+        bar.appendChild(btn);
+      });
+    }
+
+    // v3：手機底部固定導覽列（<768px，見 css.html .bottom-nav）。跟側邊欄
+    // 共用同一份 visibleTabs()／TAB_ICON／selectTab()，角色可見規則、頁籤
+    // 集合完全一致，不會有「側邊欄有的頁籤底部導覽列沒有」這種分歧。跟
+    // .tabbar 同一條「<=1 顆全隱藏」規則（用 has-tabs class 而不是每次都
+    // display:flex，單一頁籤時不用佔掉手機螢幕高度）。
+    function renderBottomNav() {
+      var bar = document.getElementById('bottomNav');
+      if (!bar) return;
+      var tabs = visibleTabs();
+      bar.innerHTML = '';
+      if (tabs.length <= 1) {
+        bar.classList.remove('has-tabs');
+        // Fable 審查建議 6：檢視者只有 1 個頁籤時沒有底部導覽列，
+        // css.html 靠這個 body class 決定要不要留出底部淨空——沒有導覽列
+        // 就不該留白，內容可以用到螢幕最底部。
+        document.body.classList.remove('has-bottom-nav');
+        return;
+      }
+      bar.classList.add('has-tabs');
+      document.body.classList.add('has-bottom-nav');
+      tabs.forEach(function (t) {
+        var btn = document.createElement('button');
+        // 給每顆底部導覽鈕獨立 id：跟側邊欄 .tab-btn（同樣文字、沒有 id）
+        // 分開，e2e/clickmap.py 的 KEY_JS 對沒有 id 的 button 用「tag+文字」
+        // 當 key，側邊欄跟底部導覽列文字相同會被判斷成同一顆按鈕、白白
+        // 沿用側邊欄那邊已經點過的紀錄——這裡的按鈕從沒被真的點過也會被
+        // 誤判成「已測」。id 一設，兩邊各自獨立計入覆蓋率，才是真的測到。
+        btn.id = 'bottomNav-' + t.id;
+        btn.className = 'bottom-nav-btn';
+        btn.type = 'button';
+        btn.setAttribute('role', 'tab');
+        btn.setAttribute('aria-selected', String(t.id === activeTabId));
+        var iconFn = TAB_ICON[t.id];
+        if (iconFn) btn.appendChild(iconFn());
+        var labelSpan = document.createElement('span');
+        labelSpan.textContent = t.label;
+        btn.appendChild(labelSpan);
+        btn.addEventListener('click', function () { selectTab(t.id); });
         bar.appendChild(btn);
       });
     }
@@ -3993,6 +4446,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       updateTopbarUser();
       setAppState('app');
       renderTabbar();
+      renderBottomNav();
       renderActiveTab();
 
       call('getSettings', {})
@@ -5015,8 +5469,19 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
 
     root.innerHTML =
       '<div class="filters"><select id="storeSelect"></select><select id="monthSelect"></select>' +
-      '<button type="button" class="btn-secondary" id="downloadPnlCsvBtn">下載損益表 CSV</button>' +
-      '<button type="button" class="btn-secondary" id="downloadEntriesCsvBtn">下載明細 CSV</button></div>' +
+      '<button type="button" class="btn-secondary csv-download-btn" id="downloadPnlCsvBtn">下載損益表 CSV</button>' +
+      '<button type="button" class="btn-secondary csv-download-btn" id="downloadEntriesCsvBtn">下載明細 CSV</button>' +
+      // v3：手機版單一「下載 ▾」select，桌面版一律隱藏（見 css.html
+      // .download-select-mobile）。兩個 option 的實際下載邏輯直接沿用
+      // downloadPnlCsvBtn／downloadEntriesCsvBtn 的 click handler（下面
+      // wireDownloadSelect()），不重複實作一次下載流程。
+      '<select id="downloadSelect" class="download-select-mobile" aria-label="下載">' +
+      // Fable 審查建議 5：原生 select 本身就會畫自己的下拉箭頭，option
+      // 文字裡再放一個「▾」是重複視覺元素，拿掉。
+      '<option value="" selected>下載</option>' +
+      '<option value="pnl">損益表 CSV</option>' +
+      '<option value="entries">明細 CSV</option>' +
+      '</select></div>' +
       '<div class="empty-state hidden" id="noStoreHint"></div>' +
       '<div class="month-status" id="monthStatus"></div>' +
       '<div class="retry-bar hidden" id="retryBar"></div>' +
@@ -5115,6 +5580,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       lastLoaded = { store_id: requestStore, month: requestMonth, result: result, entries: data.entries || [] };
       downloadPnlCsvBtn.disabled = false;
       downloadEntriesCsvBtn.disabled = false;
+      document.getElementById('downloadSelect').disabled = false;
 
       dashBody.innerHTML = '';
       var statusEl = document.getElementById('monthStatus');
@@ -5388,6 +5854,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       monthSelect.disabled = true;
       downloadPnlCsvBtn.disabled = true;
       downloadEntriesCsvBtn.disabled = true;
+      document.getElementById('downloadSelect').disabled = true;
       dashBody.innerHTML = '';
       document.getElementById('monthStatus').textContent = '';
     }
@@ -5420,6 +5887,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
 
     downloadPnlCsvBtn.disabled = true;
     downloadEntriesCsvBtn.disabled = true;
+    document.getElementById('downloadSelect').disabled = true;
 
     downloadPnlCsvBtn.addEventListener('click', function () {
       if (!lastLoaded) return;
@@ -5446,6 +5914,17 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         downloadEntriesCsvBtn.disabled = false;
         handleApiError(err);
       });
+    });
+
+    // v3：手機版「下載 ▾」select——選其中一個 option 就轉發成對應按鈕的
+    // click（沿用既有下載邏輯與 disabled 狀態管理，不重複實作），選完立刻
+    // 把 select 重設回佔位選項，下次還能再選同一個。
+    var downloadSelect = document.getElementById('downloadSelect');
+    downloadSelect.addEventListener('change', function () {
+      var v = downloadSelect.value;
+      downloadSelect.value = '';
+      if (v === 'pnl') downloadPnlCsvBtn.click();
+      else if (v === 'entries') downloadEntriesCsvBtn.click();
     });
 
     storeSelect.addEventListener('change', load);
@@ -6973,6 +7452,33 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     // gas/dashboard.html 的 NO_STORE_HINT_TEXT 逐字一致。
     var NO_STORE_HINT_TEXT = '尚未設定門市：管理者請到「設定 ▸ 門市」新增，或在試算表點選單「損益系統 ▸ 載入光復門市資料」';
 
+    // v3 手機緊湊化 Fable 審查必修 2：頂部收合卡（.settings-top-collapsible）
+    // 原本只在「建立當下」讀一次 window.innerWidth 決定 open——如果視窗是
+    // 在頁面停留期間跨過 768px 這個斷點（例如手機橫向鎖定、平板分割畫面、
+    // 或單純把瀏覽器視窗拉寬），不會重新判斷。改用 matchMedia 訂閱
+    // '(min-width:768px)' 的變化：跨進桌面寬度一律強制展開；縮回手機寬度
+    // 「保留當下開合狀態」（不強制收合，使用者剛展開看的東西不要突然被收
+    // 起來）。監聽器掛在模組層級、只註冊一次（不是每次 renderShell() 都
+    // 重新 addEventListener，避免每次切分頁/重新整理都疊加一個新監聽器），
+    // 透過 currentTopCollapsible 這個活動指標指到「目前畫面上那個」
+    // <details> 節點——renderShell() 每次重建 DOM 時只要更新這個指標，不用
+    // 管舊節點的監聽器（舊節點已經從 DOM 移除，不會再被使用者看到）。
+    var currentTopCollapsible = null;
+    var desktopMql = null;
+    try {
+      if (window.matchMedia) {
+        desktopMql = window.matchMedia('(min-width: 768px)');
+        var onDesktopMqlChange = function (ev) {
+          if (currentTopCollapsible && ev.matches) currentTopCollapsible.open = true;
+        };
+        if (typeof desktopMql.addEventListener === 'function') {
+          desktopMql.addEventListener('change', onDesktopMqlChange);
+        } else if (typeof desktopMql.addListener === 'function') {
+          desktopMql.addListener(onDesktopMqlChange); // 舊版 Safari／相容寫法
+        }
+      }
+    } catch (e) { /* 忽略：matchMedia 不可用時退化成只在建立當下判斷一次 */ }
+
     var BLOCKS = ['營收', '食材', '包材', '人事', '可控', '不可控', '營業稅', '營業外收入'];
     var MODES = ['手動', '匯入', '固定', '公式', '連接器'];
     var ROLES = ['管理者', '填寫者', '檢視者'];
@@ -7254,10 +7760,32 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           return;
         }
 
-        root.appendChild(buildCreateDraftPanel());
+        // v3（2026-09-26 手機緊湊化）：兩張卡包進同一個 <details>——手機
+        // （<768px）預設收合成一張可收合卡（css.html .settings-top-collapsible
+        // 負責畫外觀＋▸/▾箭頭）；電腦（>=768px）用 CSS 強制隱藏 <summary>、
+        // 兩張卡一律顯示，外觀跟改版前完全一樣（同一份 DOM／JS，不用另外
+        // 判斷視窗寬度分流兩套渲染路徑）。
+        var topCollapsible = document.createElement('details');
+        topCollapsible.className = 'settings-top-collapsible';
+        // ⚠ Chromium／同代瀏覽器對 <details> 收合的內部實作不是單純
+        // display:none（是內部 slot 的 content-visibility 行為），CSS 沒辦法
+        // 靠「覆寫 display」逼一個沒有 open 屬性的 <details> 在桌面版顯示成
+        // 展開——一定要直接設定 .open 這個屬性/property 本身。手機
+        // （<768px）預設收合、電腦一律展開（且 css.html 把 <summary> 藏起來，
+        // 電腦版沒有任何辦法把它點成收合，等同改版前的「兩張固定卡片」）。
+        // Fable 審查必修 2：用 desktopMql.matches（而不是只讀一次
+        // window.innerWidth）判斷初始狀態，跨斷點時上面的 matchMedia
+        // change 監聽器會再校正一次（見模組層級註解）。
+        topCollapsible.open = desktopMql ? desktopMql.matches : (window.innerWidth >= 768);
+        currentTopCollapsible = topCollapsible; // 更新「目前畫面上這個節點」的活動指標
+        var topSummary = document.createElement('summary');
+        topSummary.textContent = '建立上月草稿／立即拉取本月連接器';
+        topCollapsible.appendChild(topSummary);
+        topCollapsible.appendChild(buildCreateDraftPanel());
         // T15（#16）落地清單第 7 項：跟「建立上月草稿」並排，管理者專用
         // （整頁本來就只有管理者看得到，見檔頭註解）。
-        root.appendChild(buildRefreshConnectorsPanel());
+        topCollapsible.appendChild(buildRefreshConnectorsPanel());
+        root.appendChild(topCollapsible);
 
         var nav = el('div', 'settings-nav');
         nav.setAttribute('role', 'tablist');
