@@ -2911,8 +2911,16 @@
   // 這裡的金額全部來自後端 engine 已經算好的 result（不是逐筆明細原始
   // 值），已經是乾淨的數字，所以不需要「金額格式錯」狀態欄——那是
   // buildEntriesCsvRows（逐筆明細，資料可能本來就壞）才要處理的問題。
+  // T18b（daily-refresh，人事估算追加）：result.estimates（若有，見
+  // gas/api.js 的 apiGetMonth_／gas/laborEstimate.js）是 {acc_id: 估算金額}
+  // ——這些金額**不是**寫進明細的真實資料，只是儀表板／CSV 顯示用的推估值。
+  // 新增「是否估算」欄：科目本身金額來自 estimates 就標「是」，否則空白；
+  // 人事小計、營業淨利、稅後淨利只要牽涉到任何估算科目，也一併標「是」，
+  // 讓看報表的人一眼知道這幾個數字不是定案的真實數字。
   function buildPnlCsvRows(accounts, result) {
     var revenue = (result.blocks && typeof result.blocks['營收'] === 'number') ? result.blocks['營收'] : 0;
+    var estimates = (result && result.estimates && typeof result.estimates === 'object') ? result.estimates : {};
+    var hasAnyEstimate = Object.keys(estimates).length > 0;
 
     function pctText(amount) {
       if (typeof amount !== 'number' || !isFinite(amount) || revenue === 0) return '';
@@ -2928,28 +2936,31 @@
       });
     }
 
-    var rows = [['區塊', 'acc_id', '科目', '取值方式', '金額', '佔營收%']];
+    var rows = [['區塊', 'acc_id', '科目', '取值方式', '金額', '佔營收%', '是否估算']];
 
     PNL_BLOCKS.forEach(function (block) {
       var blockAccounts = sortAccounts((accounts || []).filter(function (a) {
         return a.active === true && a.in_pnl === true && a.block === block;
       }));
+      var blockHasEstimate = false;
       blockAccounts.forEach(function (a) {
         var amountRaw = result.accounts ? result.accounts[a.acc_id] : undefined;
         var amount = typeof amountRaw === 'number' ? amountRaw : 0;
+        var isEstimate = Object.prototype.hasOwnProperty.call(estimates, a.acc_id);
+        if (isEstimate) blockHasEstimate = true;
         rows.push([
           textCell(block), textCell(a.acc_id), textCell(a.name), textCell(a.mode),
-          numCell(amount, 2), textCell(pctText(amount))
+          numCell(amount, 2), textCell(pctText(amount)), textCell(isEstimate ? '是' : '')
         ]);
       });
       var blockTotal = (result.blocks && typeof result.blocks[block] === 'number') ? result.blocks[block] : 0;
-      rows.push([textCell(block), '', textCell('小計'), '', numCell(blockTotal, 2), textCell(pctText(blockTotal))]);
+      rows.push([textCell(block), '', textCell('小計'), '', numCell(blockTotal, 2), textCell(pctText(blockTotal)), textCell(blockHasEstimate ? '是' : '')]);
     });
 
     var op = typeof result.operating_profit === 'number' ? result.operating_profit : 0;
     var np = typeof result.net_profit === 'number' ? result.net_profit : 0;
-    rows.push(['', '', textCell('營業淨利'), '', numCell(op, 2), textCell(pctText(op))]);
-    rows.push(['', '', textCell('稅後淨利'), '', numCell(np, 2), textCell(pctText(np))]);
+    rows.push(['', '', textCell('營業淨利'), '', numCell(op, 2), textCell(pctText(op)), textCell(hasAnyEstimate ? '是' : '')]);
+    rows.push(['', '', textCell('稅後淨利'), '', numCell(np, 2), textCell(pctText(np)), textCell(hasAnyEstimate ? '是' : '')]);
 
     return rows;
   }
@@ -4136,6 +4147,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       App.name = '';
       App.role = '';
       App.stores = [];
+      pendingOldPass = null; // T20：AUTH／登出當下可能正卡在強制換碼畫面，清掉殘留狀態
+      mustChangeMode = null;
       renderShellDom();
       // renderShellDom() 只在第一次真的重建 DOM（domBuilt 短路），之後每次
       // logout/AUTH 都要靠這裡自己切 class 把外殼（app-shell）藏回去、
@@ -4144,6 +4157,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       // 測試 AUTH 錯誤路徑時抓到的真實 bug，不是假設）。
       document.getElementById('loginScreen').classList.remove('hidden');
       document.getElementById('backendConfirmScreen').classList.add('hidden');
+      document.getElementById('mustChangeScreen').classList.add('hidden');
       document.getElementById('appShell').classList.add('hidden');
       closeSidebar();
       setAppState('login');
@@ -4189,6 +4203,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         '  <div class="login-brand" id="loginBrand">損益系統</div>' +
         '  <form class="login-card" id="loginForm">' +
         '    <div>' +
+        '      <label for="loginName">帳號</label>' +
+        '      <input type="text" id="loginName" name="name" autocomplete="username" required>' +
+        '    </div>' +
+        '    <div>' +
         '      <label for="loginPass">通行碼</label>' +
         '      <input type="password" id="loginPass" name="pass" autocomplete="current-password" required>' +
         '    </div>' +
@@ -4209,6 +4227,35 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         '    <button type="button" class="btn-secondary" id="backendConfirmNo">改用預設光復後端</button>' +
         '  </div>' +
         '</div>' +
+        // T20（通行碼只有本人看得到）：需更換通行碼（首次登入用臨時碼／
+        // 管理者重設後）強制走這個畫面，不能跳過（沒有任何「關閉」或
+        // 「稍後再設」的路徑，只有 mustChangeCancel 這顆鈕——那顆只在
+        // 「主動更改通行碼」（mode='voluntary'，右上角使用者選單觸發）才會
+        // 顯示，見 showMustChange()）。mustChangeOldWrap 這格在 forced 模式
+        // 底下整個隱藏＋不要求填寫，因為舊通行碼就是剛剛登入用的那組，直接
+        // 沿用 pendingOldPass，不用使用者再打一次；voluntary 模式才需要
+        // 使用者自己輸入目前的通行碼。
+        '<div class="login-screen hidden" id="mustChangeScreen">' +
+        '  <div class="login-brand">設定通行碼</div>' +
+        '  <form class="login-card" id="mustChangeForm">' +
+        '    <div class="must-change-intro" id="mustChangeIntro"></div>' +
+        '    <div id="mustChangeOldWrap" class="hidden">' +
+        '      <label for="mustChangeOld">目前的通行碼</label>' +
+        '      <input type="password" id="mustChangeOld" name="old" autocomplete="current-password">' +
+        '    </div>' +
+        '    <div>' +
+        '      <label for="mustChangeNew1">新通行碼</label>' +
+        '      <input type="password" id="mustChangeNew1" name="new1" autocomplete="new-password" required>' +
+        '    </div>' +
+        '    <div>' +
+        '      <label for="mustChangeNew2">再輸入一次新通行碼</label>' +
+        '      <input type="password" id="mustChangeNew2" name="new2" autocomplete="new-password" required>' +
+        '    </div>' +
+        '    <button type="submit" class="btn-primary" id="mustChangeSubmit"><span id="mustChangeSubmitText">設定通行碼</span></button>' +
+        '    <div class="login-error" id="mustChangeError" role="alert"></div>' +
+        '    <button type="button" class="btn-secondary hidden" id="mustChangeCancel">取消</button>' +
+        '  </form>' +
+        '</div>' +
         '<div class="app-shell hidden" id="appShell">' +
         '  <div class="progress-bar hidden" id="progressBar" role="progressbar" aria-label="處理中"></div>' +
         '  <div class="topbar" id="topbar">' +
@@ -4218,6 +4265,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         '    </div>' +
         '    <div class="topbar-user">' +
         '      <span id="topbarUser"><span id="topbarUserName"></span><span id="topbarUserRole" class="topbar-user-role"></span></span>' +
+        '      <button class="btn-changepass" id="changePasscodeBtn" type="button">更改通行碼</button>' +
         '      <button class="btn-logout" id="logoutBtn" type="button" aria-label="登出">' +
         '        <span class="btn-logout-icon" id="logoutIcon"></span>' +
         '        <span class="btn-logout-text">登出</span>' +
@@ -4240,6 +4288,17 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       // 例外——見檔頭註解與 test/ui/xss.test.js。
 
       document.getElementById('loginForm').addEventListener('submit', onLoginSubmit);
+      document.getElementById('mustChangeForm').addEventListener('submit', onMustChangeSubmit);
+      document.getElementById('mustChangeCancel').addEventListener('click', function () {
+        pendingOldPass = null;
+        mustChangeMode = null;
+        document.getElementById('mustChangeScreen').classList.add('hidden');
+        document.getElementById('appShell').classList.remove('hidden');
+        setAppState('app');
+      });
+      document.getElementById('changePasscodeBtn').addEventListener('click', function () {
+        showMustChange('voluntary');
+      });
       document.getElementById('logoutIcon').appendChild(window.PnlIcon.logout());
       document.getElementById('logoutBtn').addEventListener('click', function () { logout(''); });
       document.getElementById('backendConfirmYes').addEventListener('click', function () {
@@ -4285,26 +4344,123 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       }
     }
 
+    // T20：登入成功（scope='full'，不需要強制換碼）時，把 token/session 寫進
+    // App 與 sessionStorage——changeMyPasscode 成功後也會呼叫這支，用同一套
+    // 邏輯把新 token 換上去，兩個入口不寫兩份會漂移的邏輯。
+    function applyLoginSuccess(data) {
+      App.token = data.token;
+      App.name = data.name;
+      App.role = data.role;
+      App.stores = data.stores || [];
+      storageSet(TOKEN_KEY, data.token);
+      storageSet(SESSION_KEY, JSON.stringify({ name: data.name, role: data.role, stores: data.stores }));
+    }
+
+    // T20：登入時如果剛好用的是需更換的臨時通行碼，login 回應帶
+    // must_change:true 跟一把 scope='changeOnly' 的受限 token（沒有
+    // stores）。這裡先記住這次登入輸入的通行碼（pendingOldPass）——強制
+    // 換碼畫面不會再問一次「目前的通行碼」，直接拿這組去打
+    // changeMyPasscode 的 old 欄位；「主動更改通行碼」（右上角選單）那個
+    // 入口沒有這個值可用，會在畫面上另外要求輸入，見 showMustChange()。
+    var pendingOldPass = null;
+    var mustChangeMode = null; // 'forced'（登入被迫換碼，不能跳過）｜'voluntary'（自己主動改）
+
     function onLoginSubmit(ev) {
       ev.preventDefault();
+      var name = document.getElementById('loginName').value;
       var pass = document.getElementById('loginPass').value;
       var errEl = document.getElementById('loginError');
       errEl.textContent = '';
       setLoginSubmitting(true);
-      call('login', { pass: pass })
+      call('login', { name: name, pass: pass })
         .then(function (data) {
-          App.token = data.token;
-          App.name = data.name;
-          App.role = data.role;
-          App.stores = data.stores || [];
-          storageSet(TOKEN_KEY, data.token);
-          storageSet(SESSION_KEY, JSON.stringify({ name: data.name, role: data.role, stores: data.stores }));
+          if (data.must_change) {
+            App.token = data.token; // 受限 token，只能呼叫 changeMyPasscode
+            App.name = data.name;
+            App.role = data.role;
+            pendingOldPass = pass;
+            showMustChange('forced');
+            return;
+          }
+          applyLoginSuccess(data);
           enterApp();
         })
         .catch(function (err) {
           errEl.textContent = errorMessage(err);
         })
         .then(function () { setLoginSubmitting(false); });
+    }
+
+    // ---- T20：需更換通行碼／主動更改通行碼，共用同一個畫面 ----
+    function setMustChangeSubmitting(submitting) {
+      var btn = document.getElementById('mustChangeSubmit');
+      var textEl = document.getElementById('mustChangeSubmitText');
+      if (!btn || !textEl) return;
+      btn.disabled = submitting;
+      textEl.textContent = submitting ? '處理中…' : '設定通行碼';
+    }
+
+    // mode: 'forced'（登入判定需更換，沒有取消路徑，不能跳過）｜
+    // 'voluntary'（右上角使用者選單主動觸發，可以取消回到原本畫面）。
+    function showMustChange(mode) {
+      mustChangeMode = mode;
+      renderShellDom();
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('backendConfirmScreen').classList.add('hidden');
+      document.getElementById('appShell').classList.add('hidden');
+      document.getElementById('mustChangeScreen').classList.remove('hidden');
+      closeSidebar();
+      setAppState('must-change');
+
+      var introEl = document.getElementById('mustChangeIntro');
+      var oldWrap = document.getElementById('mustChangeOldWrap');
+      var oldInput = document.getElementById('mustChangeOld');
+      var cancelBtn = document.getElementById('mustChangeCancel');
+      document.getElementById('mustChangeError').textContent = '';
+      document.getElementById('mustChangeNew1').value = '';
+      document.getElementById('mustChangeNew2').value = '';
+      oldInput.value = '';
+
+      if (mode === 'forced') {
+        introEl.textContent = '這組通行碼是臨時碼，請設定一組只有你自己知道的新通行碼才能繼續使用。';
+        oldWrap.classList.add('hidden');
+        oldInput.required = false;
+        cancelBtn.classList.add('hidden');
+        document.getElementById('mustChangeNew1').focus();
+      } else {
+        introEl.textContent = '更改你的通行碼。';
+        oldWrap.classList.remove('hidden');
+        oldInput.required = true;
+        cancelBtn.classList.remove('hidden');
+        oldInput.focus();
+      }
+    }
+
+    function onMustChangeSubmit(ev) {
+      ev.preventDefault();
+      var errEl = document.getElementById('mustChangeError');
+      errEl.textContent = '';
+      var newPass = document.getElementById('mustChangeNew1').value;
+      var newPass2 = document.getElementById('mustChangeNew2').value;
+      if (newPass !== newPass2) {
+        errEl.textContent = '兩次輸入的新通行碼不一致';
+        return;
+      }
+      var oldPass = mustChangeMode === 'forced' ? pendingOldPass : document.getElementById('mustChangeOld').value;
+      setMustChangeSubmitting(true);
+      call('changeMyPasscode', { old: oldPass, new: newPass })
+        .then(function (data) {
+          pendingOldPass = null;
+          mustChangeMode = null;
+          applyLoginSuccess(data);
+          document.getElementById('mustChangeScreen').classList.add('hidden');
+          showToast('通行碼已更新');
+          enterApp();
+        })
+        .catch(function (err) {
+          errEl.textContent = errorMessage(err);
+        })
+        .then(function () { setMustChangeSubmitting(false); });
     }
 
     // ---- 頁籤：T07 只做「儀表板」；#9–#11 之後在這個清單各加一項，不用
@@ -4603,6 +4759,20 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     }
   }
 
+  // Fable 第二輪對抗審查必修 5：把 created_at（gas/apiWrite.js 的
+  // nowIso_() 產出，已經是固定台北 UTC+8 偏移的 ISO 字串，例如
+  // '2026-09-15T05:15:00+08:00'）轉成「M/D」——直接從字串切日期段，不用
+  // Date 物件／時區換算（來源本來就已經是台北時間，再經過一次 new
+  // Date().getMonth() 那種本地時區解讀反而可能因為瀏覽器時區不是台北而
+  // 算錯）。輸入格式不對就回空字串，呼叫端自己決定要不要顯示日期段。
+  function taipeiDateToMD(iso) {
+    if (typeof iso !== 'string' || iso.length < 10) return '';
+    var m = parseInt(iso.slice(5, 7), 10);
+    var d = parseInt(iso.slice(8, 10), 10);
+    if (!m || !d) return '';
+    return m + '/' + d;
+  }
+
   function shiftMonthStr(month, delta) {
     var year = parseInt(month.slice(0, 4), 10);
     var mon = parseInt(month.slice(5, 7), 10);
@@ -4712,7 +4882,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     if (info.mismatch) {
       var textWrap = el('span', 'kpi-badge-text');
       textWrap.appendChild(document.createTextNode('—'));
-      var hint = el('span', 'mismatch-hint', '店家組成不同');
+      // T18b：月中營收比較沒有逐日資料可比同期時，沿用同一個「灰色—＋
+      // 小字」版面，只是小字換成 info.hintText（沒帶就維持原本「店家組成
+      // 不同」，isAll 那條路徑沒有動）。
+      var hint = el('span', 'mismatch-hint', info.hintText || '店家組成不同');
       textWrap.appendChild(hint);
       row.appendChild(textWrap);
     } else {
@@ -5592,6 +5765,33 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         statusEl.textContent = parts.length ? parts.join('　') : '無資料';
       } else {
         statusEl.textContent = '狀態：' + (data.status || '無');
+        // Fable 第二輪對抗審查必修 5：光復店長手動上傳 POS（T01）之後，
+        // posPush 的「人贏機器」規則會整個跳過自動推送（見
+        // gas/posPush.js 的 posPushHasLiveManualEntries_）——這個月不會
+        // 有「匯入:POS自動」的活著明細，畫面上不該還是空白讓人以為「自動
+        // 推送忘了跑」，改明講「POS 已由店長手動上傳，自動推送暫停」，
+        // 日期用這筆 T01 明細的建立時間（不管是當月還是上月，同一套規
+        // 則）。這個檢查要排在 MTD 檢查之前——T01 存在時本來就不會有
+        // 「匯入:POS自動」的活著明細，兩個條件互斥，順序其實不影響結果，
+        // 但語意上「人蓋過機器」優先講清楚比較好懂。
+        var manualEntry = (data.entries || []).find(function (e) {
+          return e.source === '匯入:T01';
+        });
+        if (manualEntry) {
+          var manualMd = manualEntry.created_at ? taipeiDateToMD(manualEntry.created_at) : '';
+          statusEl.textContent += '　POS 已由店長手動上傳' + (manualMd ? '（' + manualMd + '）' : '') + '，自動推送暫停';
+        } else {
+          // T18b：POS 自動推送月中累計——posPush 寫進明細備註的「本月累計
+          // 至 M/D」原封不動抓來顯示在狀態旁，不用重新算一次（note 是
+          // 穩定來源，見 gas/posPush.js）。只在單店視圖顯示（ALL 彙總沒有
+          // 單一「累計到哪一天」的意義）。
+          var mtdEntry = (data.entries || []).find(function (e) {
+            return e.source === '匯入:POS自動' && typeof e.note === 'string' && e.note.indexOf('本月累計至') === 0;
+          });
+          if (mtdEntry) {
+            statusEl.textContent += '　' + mtdEntry.note.split('；')[0];
+          }
+        }
       }
 
       // Fable 審查 #3：這個月完全沒建草稿 → 空狀態，不畫卡片／待補／上月比較。
@@ -5615,14 +5815,31 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         var currentStoreIds = Object.keys(data.status || {});
         mismatch = !sameStringSet(currentStoreIds, data.prev_stores || []);
       }
+
+      // Fable 第二輪對抗審查建議 8：月中（當月、未定稿）時，所有「較上月」
+      // 卡片（不只營收）都改標「月中，不比較」——本系統沒有逐日資料能算出
+      // 真正的「上月同期」，用整月金額對半個月硬湊出來的百分比／漲跌會
+      // 誤導 Eason（食材成本半個月看起來「大跌」，其實只是月份還沒過完）。
+      // 挪到 deltaFor／badgeInfoFor 定義之前，這兩個共用函式才能直接判斷。
+      var isCurrentMonthPartial = !isAll && requestMonth === taipeiMonthNow() && data.status !== '定稿';
+      // buildKpiBadge 對 mismatch:true 的徽章只會顯示 info.hintText 那個
+      // 小字（見該函式），不是 full／short——這裡刻意把「月中，不比較」放
+      // hintText，才是畫面上真的看得到的那段文字；full/short 保留只是跟
+      // deltaInfo() 回傳形狀一致，不影響實際渲染。沿用 mismatch:true 這個
+      // 既有的「灰色—＋小字」版面，不用另外設計一種徽章樣式。
+      var MTD_INFO = { dir: 'flat', arrow: '—', full: '月中，不比較', short: '—', mismatch: true, hintText: '月中，不比較' };
+
       function deltaFor(cur, prevVal) {
+        if (isCurrentMonthPartial) return el('div', 'delta flat', MTD_INFO.hintText);
         if (mismatch) return mismatchDeltaEl();
         return deltaEl(cur, prevVal);
       }
       // KPI 卡用的圓形徽章版本（item 1）：mismatch 時回傳同一個
       // MISMATCH_INFO，buildKpiBadge 知道怎麼把它畫成灰色「—」＋小字，
-      // 不會取代整個徽章區域。
+      // 不會取代整個徽章區域；isCurrentMonthPartial 時同樣的版面改顯示
+      // MTD_INFO。
       function badgeInfoFor(cur, prevVal) {
+        if (isCurrentMonthPartial) return MTD_INFO;
         if (mismatch) return MISMATCH_INFO;
         return deltaInfo(cur, prevVal);
       }
@@ -5637,6 +5854,19 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       // ---- 頂排 4 張 KPI 卡（營業額／食材成本(含包材)／人事／稅後淨利） ----
       var foodCost = safeNum(blocks['食材']) + safeNum(blocks['包材']);
       var prevFoodCost = prevBlocks ? safeNum(prevBlocks['食材']) + safeNum(prevBlocks['包材']) : null;
+
+      // T18c（人事估算）：result.estimates／result.estimate_basis 只有
+      // gas/api.js 的 attachLaborEstimateIfApplicable_ 在「單店、當月、
+      // 未定稿、快取有值」時才會附加，ALL 彙總視圖／已定稿月份一律沒有
+      // 這兩個欄位，這裡不用另外判斷 isAll——沒有就是沒有估算，標記自然
+      // 不會出現。
+      var hasEstimate = !!(result.estimates && Object.keys(result.estimates).length);
+      var estimateBasis = result.estimate_basis;
+      var laborKpiLabel = '人事' + (hasEstimate ? '（估）' : '');
+      var netProfitKpiLabel = '稅後淨利' + (hasEstimate ? '（含估算）' : '');
+      if (hasEstimate && estimateBasis && estimateBasis.label) {
+        dashBody.appendChild(el('div', 'mismatch-note', '人事估算：' + estimateBasis.label));
+      }
 
       var kpiRow = el('div', 'kpi-row');
       kpiRow.appendChild(buildKpiCard({
@@ -5656,7 +5886,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         subRows: [['食材', blocks['食材']], ['包材', blocks['包材']]]
       }));
       kpiRow.appendChild(buildKpiCard({
-        label: '人事', value: blocks['人事'],
+        label: laborKpiLabel, value: blocks['人事'],
         badgeInfo: badgeInfoFor(blocks['人事'], prevBlocks ? prevBlocks['人事'] : null),
         trend: trend, isAllView: isAll, forceZeroMin: true, color: '#2f6fb0',
         valueFn: function (r) { return r.blocks && r.blocks['人事']; },
@@ -5664,7 +5894,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         pctText: fmtPct1(blocks['人事'], revenueVal)
       }));
       kpiRow.appendChild(buildKpiCard({
-        label: '稅後淨利', value: result.net_profit,
+        label: netProfitKpiLabel, value: result.net_profit,
         badgeInfo: badgeInfoFor(result.net_profit, prev ? prev.net_profit : null),
         trend: trend, isAllView: isAll, forceZeroMin: false, color: 'var(--up)',
         valueFn: function (r) { return r.net_profit; },
@@ -7565,29 +7795,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       return prefix + s;
     }
 
-    // 10 碼以上的隨機通行碼；避免容易混淆的字元（0/O、1/l/I）。
-    var PASSCODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-    // Fable 對抗審查建議 #13（PR #32）：原本 `arr[i] % PASSCODE_CHARS.length`
-    // 對 58 個字元的字母表有模數偏誤（2^32 不是 58 的倍數，數值落在
-    // [0, 2^32 - 2^32%58) 以外那一小段餘數的字元會被抽中的機率略高於其他
-    // 字元——機率差距小到肉眼／統計檢定都很難發現，但既然是安全用途的隨機
-    // 字元就不該留這個理論瑕疵）。改成 rejection sampling：算出「2^32 內
-    // 能被 58 整除的最大上界」，抽到超過上界的值直接丟掉重抽，保證每個
-    // 字元被選中的機率完全相等。
-    function randomCharIndex_(max) {
-      var range = Math.floor(0x100000000 / max) * max; // 2^32 內能被 max 整除的最大上界
-      var buf = new Uint32Array(1);
-      while (true) {
-        (window.crypto || window.msCrypto).getRandomValues(buf);
-        if (buf[0] < range) return buf[0] % max;
-      }
-    }
-    function generatePasscode() {
-      var len = 12;
-      var out = '';
-      for (var i = 0; i < len; i++) out += PASSCODE_CHARS[randomCharIndex_(PASSCODE_CHARS.length)];
-      return out;
-    }
+    // T20（通行碼只有本人看得到）：通行碼不再由前端產生——改打後端
+    // action='generatePasscode'（見「使用者」表格 genBtn 的 click handler），
+    // 這裡不再需要 window.crypto 亂數／rejection sampling 那一套，移除
+    // 舊的 generatePasscode()／randomCharIndex_()／PASSCODE_CHARS。
 
     // Fable 對抗審查建議 #3（PR #32 第二輪）：跟 gas/apiWrite.js 的
     // sanitizeAccountParamsForMode_ 同一條規則（非公式清 formula、非手動
@@ -8911,12 +9122,23 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
             passTd.appendChild(document.createElement('br'));
             var genBtn = el('button', 'btn-small', needsNewPass ? '產生通行碼' : '重設通行碼');
             genBtn.type = 'button';
+            // T20（通行碼只有本人看得到）：前端不再自己生通行碼——改打後端
+            // action='generatePasscode'（管理者專用，見 gas/api.js
+            // apiGeneratePasscode_），拿到的臨時碼一樣先塞進 r.pass、存檔時
+            // 才真的雜湊寫入（saveUsersTable_ 收到 r.pass 非空會自動把這個
+            // 人標成「需更換通行碼＝TRUE」，強制他下次登入自設）。按鈕在
+            // 等待回應期間停用，避免連點打兩次要求／忘記自己按過。
             genBtn.addEventListener('click', function () {
-              var code = generatePasscode();
-              r.pass = code;
-              pendingCodes[r._localId] = true;
-              showPasscodeOnceModal(r.name || '（新使用者）', code);
-              renderRows();
+              genBtn.disabled = true;
+              call('generatePasscode', {}).then(function (data) {
+                r.pass = data.passcode;
+                pendingCodes[r._localId] = true;
+                showPasscodeOnceModal(r.name || '（新使用者）', data.passcode);
+                renderRows();
+              }).catch(function (err) {
+                genBtn.disabled = false;
+                showToast(errorMessage(err));
+              });
             });
             passTd.appendChild(genBtn);
             tr.appendChild(passTd);
@@ -8991,11 +9213,27 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           }), function (r) { return r.name + '（' + r.role + '，' + ((r.stores || []).join(',') || '無') + '）'; });
           var notes = newPassCount ? [newPassCount + ' 位使用者的通行碼將更新'] : [];
 
+          // Fable 審查建議 6（PR #44）：管理者正在重設「自己」的通行碼——
+          // 存檔成功後這個 session 的 token 會因為通行碼版本標記對不上而
+          // 立即失效（見 gas/api.js requireUser_ 的 pvTag 檢查），存檔前
+          // 先提醒，避免存完檔突然被登出卻一頭霧水。
+          var resettingSelf = App.name && rows.some(function (r) { return r.name === App.name && r.pass; });
+          if (resettingSelf) {
+            notes.push('⚠ 你正在重設自己的通行碼，存檔後會立即登出——請用剛才顯示的臨時通行碼重新登入，並當場設定一組新通行碼。');
+          }
+
           showDiffAndSave('使用者', diff, notes, function () {
-            return saveTable_('users', rows).then(function () {
+            return saveTable_('users', rows).then(function (data) {
               state.data.users = rows.map(function (r) { return { name: r.name, role: r.role, stores: r.stores }; });
               rows.forEach(function (r) { r.pass = ''; r.pass_hash = r.pass_hash || 'x'; r._origName = r.name; });
               Object.keys(pendingCodes).forEach(function (k) { delete pendingCodes[k]; });
+              // 建議 6：後端回傳 self_reset:true（管理者剛重設了自己的通行
+              // 碼）→ 直接登出回登入頁，不要留在一個 token 其實已經失效、
+              // 下一個 API 呼叫就會莫名其妙跳回登入頁的過渡狀態。
+              if (data && data.self_reset) {
+                logout('通行碼已重設，請用剛才顯示的臨時通行碼重新登入，並設定一組新通行碼。');
+                return;
+              }
               showToast('使用者已存檔');
               renderRows();
             });
