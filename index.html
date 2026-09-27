@@ -1094,6 +1094,38 @@
 
   .btn-link-danger { color: var(--down); }
 
+  /* invite-register：登入卡片底部「用邀請碼註冊」文字連結，置中、可換行
+     （375px 不撐出橫捲）。 */
+  .login-register-link {
+    align-self: center;
+    text-align: center;
+    white-space: normal;
+  }
+
+  /* invite-register：設定頁「邀請碼」區塊。 */
+  .invite-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    align-items: flex-end;
+    margin: 8px 0 12px;
+  }
+  .invite-form > div { min-width: 0; }
+  .invite-form select { min-height: var(--tap-min); }
+  .invite-stores label { margin-right: 10px; white-space: nowrap; display: inline-block; }
+  .invite-status-unused { color: var(--up); font-weight: 600; }
+  .invite-status-muted { color: var(--ink-soft); }
+  .invite-copy-row { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
+  .invite-section { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .invite-table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 14px; }
+  .invite-table th, .invite-table td {
+    border-bottom: 1px solid var(--line);
+    padding: 8px 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .invite-table th { color: var(--ink-soft); font-weight: 700; }
+
   .btn-add {
     min-height: var(--tap-min);
     width: 100%;
@@ -3143,6 +3175,8 @@
  * - 帳號名稱正規化（trim＋NFKC）：gas/auth.js normalizeUserName_
  * - 帳號名稱格式（不可空白／不可含 `|`／不可含控制字元／不可以
  *   `= + - @` 開頭）：gas/auth.js assertValidUserName_
+ * - 邀請碼正規化（NFKC→大寫→去掉非英數→12 碼且都在字母表內）：
+ *   gas/invite.js normalizeInviteCode_／INVITE_CODE_CHARS_
  * 這支檔案**不改動任何後端行為**，只是把同一套規則字串在前端重寫一份
  * 給即時檢查用；test/passcodeRulesParity.test.js 逐項比對兩邊在同一組
  * 輸入下的判定結果必須一致，改動任何一邊都要順手同步另一邊。
@@ -3183,6 +3217,8 @@
   var DANGEROUS_NAME_PREFIX_RE = /^[=+\-@]/;
   // eslint-disable-next-line no-control-regex -- 跟 gas/auth.js 同一條，這裡就是刻意要比對控制字元。
   var CONTROL_CHAR_RE = /[\x00-\x1F\x7F]/;
+  // 逐字對齊 gas/auth.js FORMAT_CHAR_RE_（零寬／格式字元，PR #51 輕4）。
+  var FORMAT_CHAR_RE = /[\u200B-\u200F\u2060\uFEFF]|\p{Cf}/u;
 
   // 對齊 gas/auth.js assertValidUserName_，但回傳「合法→null／不合法→錯誤
   // 訊息字串」而不是丟例外——前端要即時顯示，不是存檔才驗一次。訊息故意
@@ -3192,6 +3228,7 @@
     var name = normalizeUserName(rawName);
     if (!name) return '使用者名稱不可為空白';
     if (name.indexOf('|') !== -1) return '不可包含 |';
+    if (FORMAT_CHAR_RE.test(name)) return '不可包含看不見的格式字元（例如零寬空白）';
     if (CONTROL_CHAR_RE.test(name)) return '不可包含控制字元';
     if (DANGEROUS_NAME_PREFIX_RE.test(name)) return '不可以 = + - @ 開頭（避免被試算表/Excel 誤判成公式）';
     return null;
@@ -3204,7 +3241,9 @@
   function isDuplicateName(rawName, otherNames) {
     var name = normalizeUserName(rawName);
     if (!name) return false;
-    return (otherNames || []).some(function (n) { return normalizeUserName(n) === name; });
+    // PR #51 輕4：不分大小寫，對齊後端 saveUsersTable_／registerWithInvite。
+    var key = name.toLowerCase();
+    return (otherNames || []).some(function (n) { return normalizeUserName(n).toLowerCase() === key; });
   }
 
   // 通行碼即時檢查清單，回傳一組 {key, label, ok}，給畫面逐項打勾用。
@@ -3247,7 +3286,25 @@
     return passcodeAllOk(checkPasscode(pass, opts));
   }
 
+  // 逐字對齊 gas/invite.js INVITE_CODE_CHARS_／normalizeInviteCode_：回傳
+  // 12 碼大寫字串，格式不可能是有效碼時回 null。
+  var INVITE_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  var INVITE_CODE_LENGTH = 12;
+  function normalizeInviteCode(raw) {
+    if (typeof raw !== 'string') return null;
+    var s = raw.normalize ? raw.normalize('NFKC') : raw;
+    s = s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (s.length !== INVITE_CODE_LENGTH) return null;
+    for (var i = 0; i < s.length; i++) {
+      if (INVITE_CODE_CHARS.indexOf(s.charAt(i)) === -1) return null;
+    }
+    return s;
+  }
+
   return {
+    FORMAT_CHAR_RE: FORMAT_CHAR_RE,
+    INVITE_CODE_CHARS: INVITE_CODE_CHARS,
+    normalizeInviteCode: normalizeInviteCode,
     WEAK_PASSCODES: WEAK_PASSCODES,
     isWeakPasscode: isWeakPasscode,
     NEW_PASSCODE_RE: NEW_PASSCODE_RE,
@@ -4011,7 +4068,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       PENDING: '有科目尚未填寫',
       BAD_INPUT: '輸入有誤',
       BUSY: '有人正在存檔，請稍候再試',
-      NOT_FOUND: '找不到資料'
+      NOT_FOUND: '找不到資料',
+      // invite-register：只有匿名的 registerWithInvite 會回這兩個碼（見 gas/invite.js）。
+      INVITE_INVALID: '邀請碼無效、已使用或已過期',
+      NAME_TAKEN: '這個帳號名稱已經有人使用，請換一個'
     };
 
     function errorMessage(err) {
@@ -4126,6 +4186,11 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       // `.then(...,失敗handler)` 收尾，settle() 只在那裡呼叫一次——不論
       // 走同步 throw 或非同步 resolve/reject 哪一條路，timer 保證都會被
       // 清乾淨、不會漏、也不會被呼叫兩次。
+      // invite-register（e2e 實際撞到）：記住這次請求送出時的 token，失敗時
+      // 帶在錯誤物件上——handleApiError 用它判斷這個 AUTH 是不是「上一個
+      // session 留下的舊請求」（送出時的 token 已經不是現在這把），是的話
+      // 不要把剛登入／正在註冊的人踢出去。
+      var sentToken = App.token;
       var promise;
       try {
         promise = callTransport_(action, req);
@@ -4134,7 +4199,13 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       }
       return promise.then(
         function (data) { settle(); return data; },
-        function (err) { settle(); throw err; }
+        function (err) {
+          settle();
+          if (err && typeof err === 'object') {
+            try { Object.defineProperty(err, '__sentToken', { value: sentToken, enumerable: false, configurable: true }); } catch (e) { /* 凍結物件就算了 */ }
+          }
+          throw err;
+        }
       );
     }
     window.call = call;
@@ -4160,6 +4231,17 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     function handleApiError(err) {
       var msg = errorMessage(err);
       if (err && err.error === 'AUTH') {
+        // invite-register：登出後才回來的舊請求（例如儀表板的連鎖讀取在登出
+        // 當下還沒送出，送出時已經沒有 token）回 AUTH 時，如果使用者已經在
+        // 「用邀請碼註冊」畫面填表，不要把他踢回登入頁、清掉剛填的內容。
+        var appEl = document.getElementById('app');
+        if (!App.token && appEl && appEl.getAttribute('data-state') === 'register') return;
+        // 舊 session 的請求：送出時的 token 跟現在的不同，或送出時根本沒有
+        // token（登出之後儀表板的連鎖讀取才送出）——這種 AUTH 不代表「現在
+        // 這個人的登入過期」，忽略，不影響現在的登入狀態（e2e 實際撞到：
+        // 舊請求的 AUTH 剛好在下一個人按登入的那一刻回來，把他踢回登入頁）。
+        if (Object.prototype.hasOwnProperty.call(err, '__sentToken') &&
+            (!err.__sentToken || err.__sentToken !== App.token)) return;
         logout(msg);
         return;
       }
@@ -4346,6 +4428,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       document.getElementById('loginScreen').classList.remove('hidden');
       document.getElementById('backendConfirmScreen').classList.add('hidden');
       document.getElementById('mustChangeScreen').classList.add('hidden');
+      document.getElementById('registerScreen').classList.add('hidden');
+      clearRegisterForm();
       document.getElementById('appShell').classList.add('hidden');
       closeSidebar();
       setAppState('login');
@@ -4366,6 +4450,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     function renderBackendConfirm() {
       renderShellDom();
       document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('registerScreen').classList.add('hidden');
       document.getElementById('appShell').classList.add('hidden');
       document.getElementById('backendConfirmScreen').classList.remove('hidden');
       closeSidebar();
@@ -4401,8 +4486,44 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         '    </div>' +
         '    <button type="submit" class="btn-primary" id="loginSubmit"><span id="loginSubmitText">登入</span></button>' +
         '    <div class="login-error" id="loginError" role="alert"></div>' +
+        '    <button type="button" class="btn-link login-register-link" id="loginToRegister">拿到邀請碼了？用邀請碼註冊</button>' +
         '  </form>' +
         '  <div class="backend-footer hidden" id="backendFooter"></div>' +
+        '</div>' +
+        // invite-register（2026-09-28）：用管理者給的邀請碼自己建帳號。不做
+        // 開放註冊——沒有有效邀請碼，後端一律回 INVITE_INVALID（見
+        // gas/invite.js）。名稱／通行碼即時檢查沿用 PR #48 的
+        // window.PnlPasscodeRules（src/passcodeRules.js），全部符合才能按送出。
+        // 成功後後端直接回登入 token（不需要再走強制換碼，通行碼本來就是
+        // 本人自己設的）。純靜態骨架，文字一律 textContent 動態填。
+        '<div class="login-screen hidden" id="registerScreen">' +
+        '  <div class="login-brand">用邀請碼註冊</div>' +
+        '  <form class="login-card" id="registerForm" autocomplete="off">' +
+        '    <div class="must-change-intro">請輸入管理者給你的邀請碼，自己取一個帳號名稱和通行碼。每張邀請碼只能用一次。</div>' +
+        '    <div>' +
+        '      <label for="registerCode">邀請碼</label>' +
+        '      <input type="text" id="registerCode" name="invite" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX" aria-describedby="registerCodeHint" required>' +
+        '      <div class="field-hint" id="registerCodeHint" aria-live="polite">12 碼英數，大小寫、空白、「-」都可以不管</div>' +
+        '    </div>' +
+        '    <div>' +
+        '      <label for="registerName">帳號名稱</label>' +
+        '      <input type="text" id="registerName" name="username" autocomplete="username" aria-describedby="registerNameHint registerNamePreview" required>' +
+        '      <div class="field-hint" id="registerNameHint">中文、英文、數字都可以；不能以 = + - @ 開頭、不能含 |；之後登入就用這個名稱</div>' +
+        '      <div class="field-hint" id="registerNamePreview" aria-live="polite"></div>' +
+        '    </div>' +
+        '    <div>' +
+        '      <label for="registerPass1">通行碼</label>' +
+        '      <input type="password" id="registerPass1" name="new1" autocomplete="new-password" aria-describedby="registerChecklist" required>' +
+        '    </div>' +
+        '    <div>' +
+        '      <label for="registerPass2">再輸入一次通行碼</label>' +
+        '      <input type="password" id="registerPass2" name="new2" autocomplete="new-password" aria-describedby="registerChecklist" required>' +
+        '    </div>' +
+        '    <ul class="passcode-checklist" id="registerChecklist" aria-live="polite"></ul>' +
+        '    <button type="submit" class="btn-primary" id="registerSubmit" disabled><span id="registerSubmitText">註冊並登入</span></button>' +
+        '    <div class="login-error" id="registerError" role="alert"></div>' +
+        '    <button type="button" class="btn-secondary" id="registerBack">返回登入</button>' +
+        '  </form>' +
         '</div>' +
         // Fable 對抗審查必修 2：?api= 帶了一個不在白名單裡的後端時，登入
         // 表單完全不會出現（見 boot()），先擋在這個確認畫面——文字內容
@@ -4479,6 +4600,12 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       // 例外——見檔頭註解與 test/ui/xss.test.js。
 
       document.getElementById('loginForm').addEventListener('submit', onLoginSubmit);
+      document.getElementById('loginToRegister').addEventListener('click', showRegister);
+      document.getElementById('registerBack').addEventListener('click', function () { showLogin(''); });
+      document.getElementById('registerForm').addEventListener('submit', onRegisterSubmit);
+      ['registerCode', 'registerName', 'registerPass1', 'registerPass2'].forEach(function (id) {
+        document.getElementById(id).addEventListener('input', renderRegisterChecks);
+      });
       document.getElementById('mustChangeForm').addEventListener('submit', onMustChangeSubmit);
       ['mustChangeOld', 'mustChangeNew1', 'mustChangeNew2'].forEach(function (id) {
         document.getElementById(id).addEventListener('input', renderMustChangeChecklist);
@@ -4585,6 +4712,134 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         .then(function () { setLoginSubmitting(false); });
     }
 
+    // ---- invite-register：用邀請碼註冊 ----
+    // 即時檢查三件事，全部符合才讓「註冊並登入」可以按：邀請碼格式（12 碼、
+    // 字母表內，window.PnlPasscodeRules.normalizeInviteCode，跟後端
+    // gas/invite.js normalizeInviteCode_ 逐字對齊）、帳號名稱格式
+    // （userNameError）、通行碼清單（checkPasscode，含兩次一致）。帳號是否
+    // 已被使用只有後端知道（NAME_TAKEN），前端不猜。
+    function registerChecks() {
+      var rules = window.PnlPasscodeRules;
+      var rawCode = document.getElementById('registerCode').value;
+      var rawName = document.getElementById('registerName').value;
+      var p1 = document.getElementById('registerPass1').value;
+      var p2 = document.getElementById('registerPass2').value;
+      var code = rules.normalizeInviteCode(rawCode);
+      var nameErr = rawName ? rules.userNameError(rawName) : '請輸入帳號名稱';
+      var items = rules.checkPasscode(p1, { name: rules.normalizeUserName(rawName), confirmPass: p2 });
+      return { rawCode: rawCode, code: code, rawName: rawName, nameErr: nameErr, pass: p1, items: items,
+        ok: !!code && !nameErr && rules.passcodeAllOk(items) };
+    }
+
+    function renderRegisterChecks() {
+      var c = registerChecks();
+      var codeHint = document.getElementById('registerCodeHint');
+      if (!c.rawCode) {
+        codeHint.className = 'field-hint';
+        codeHint.textContent = '12 碼英數，大小寫、空白、「-」都可以不管';
+      } else if (c.code) {
+        codeHint.className = 'field-hint';
+        codeHint.textContent = '格式正確：' + c.code.slice(0, 4) + '-' + c.code.slice(4, 8) + '-' + c.code.slice(8);
+      } else {
+        codeHint.className = 'field-inline-error';
+        codeHint.textContent = '邀請碼格式不對（應為 12 碼英數，不含 0、O、1、I、L）';
+      }
+      var namePreview = document.getElementById('registerNamePreview');
+      var nameInput = document.getElementById('registerName');
+      if (!c.rawName) {
+        namePreview.className = 'field-hint';
+        namePreview.textContent = '';
+        nameInput.classList.remove('input-error');
+      } else if (c.nameErr) {
+        namePreview.className = 'field-inline-error';
+        namePreview.textContent = c.nameErr;
+        nameInput.classList.add('input-error');
+      } else {
+        namePreview.className = 'field-hint';
+        namePreview.textContent = '將存為：' + window.PnlPasscodeRules.normalizeUserName(c.rawName);
+        nameInput.classList.remove('input-error');
+      }
+      var checklistEl = document.getElementById('registerChecklist');
+      checklistEl.innerHTML = '';
+      c.items.forEach(function (it) {
+        var li = document.createElement('li');
+        li.className = 'passcode-check-item ' + (it.ok ? 'ok' : 'pending');
+        var mark = document.createElement('span');
+        mark.className = 'passcode-check-mark';
+        mark.setAttribute('aria-hidden', 'true');
+        mark.textContent = it.ok ? '✓' : '○';
+        li.appendChild(mark);
+        var status = document.createElement('span');
+        status.className = 'visually-hidden';
+        status.textContent = it.ok ? '已符合：' : '尚未符合：';
+        li.appendChild(status);
+        li.appendChild(document.createTextNode(it.label));
+        checklistEl.appendChild(li);
+      });
+      var submitBtn = document.getElementById('registerSubmit');
+      if (!registerSubmitting) submitBtn.disabled = !c.ok;
+      return c;
+    }
+
+    function clearRegisterForm() {
+      ['registerCode', 'registerName', 'registerPass1', 'registerPass2'].forEach(function (id) {
+        var e = document.getElementById(id);
+        if (e) e.value = '';
+      });
+      var errEl = document.getElementById('registerError');
+      if (errEl) errEl.textContent = '';
+    }
+
+    function showRegister() {
+      renderShellDom();
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('backendConfirmScreen').classList.add('hidden');
+      document.getElementById('mustChangeScreen').classList.add('hidden');
+      document.getElementById('appShell').classList.add('hidden');
+      document.getElementById('registerScreen').classList.remove('hidden');
+      closeSidebar();
+      setAppState('register');
+      clearRegisterForm();
+      renderRegisterChecks();
+      document.getElementById('registerCode').focus();
+    }
+
+    var registerSubmitting = false;
+    function setRegisterSubmitting(submitting) {
+      registerSubmitting = submitting;
+      var textEl = document.getElementById('registerSubmitText');
+      textEl.textContent = submitting ? '註冊中…' : '註冊並登入';
+      if (submitting) {
+        document.getElementById('registerSubmit').disabled = true;
+      } else {
+        renderRegisterChecks();
+      }
+    }
+
+    function onRegisterSubmit(ev) {
+      ev.preventDefault();
+      var errEl = document.getElementById('registerError');
+      errEl.textContent = '';
+      var c = renderRegisterChecks();
+      if (!c.ok) {
+        errEl.textContent = '請先把上面每一項都填對';
+        return;
+      }
+      setRegisterSubmitting(true);
+      call('registerWithInvite', { code: c.rawCode, name: c.rawName, pass: c.pass })
+        .then(function (data) {
+          applyLoginSuccess(data);
+          clearRegisterForm();
+          document.getElementById('registerScreen').classList.add('hidden');
+          showToast('註冊完成，歡迎 ' + data.name);
+          enterApp();
+        })
+        .catch(function (err) {
+          errEl.textContent = errorMessage(err);
+        })
+        .then(function () { setRegisterSubmitting(false); });
+    }
+
     // ---- T20：需更換通行碼／主動更改通行碼，共用同一個畫面 ----
     // 前端即時檢查清單：呼叫 window.PnlPasscodeRules（src/passcodeRules.js，
     // 唯一正本，與後端 gas/auth.js／gas/apiWrite.js 逐字對齊，見
@@ -4646,6 +4901,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       renderShellDom();
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('backendConfirmScreen').classList.add('hidden');
+      document.getElementById('registerScreen').classList.add('hidden');
       document.getElementById('appShell').classList.add('hidden');
       document.getElementById('mustChangeScreen').classList.remove('hidden');
       closeSidebar();
@@ -4847,6 +5103,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     function enterApp() {
       renderShellDom();
       document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('registerScreen').classList.add('hidden');
       document.getElementById('appShell').classList.remove('hidden');
       updateTopbarUser();
       setAppState('app');
@@ -9347,6 +9604,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         var wrap = el('div', 'table-wrap');
         var table = document.createElement('table');
         table.className = 'data-table';
+        table.id = 'usersTable';
         var thead = document.createElement('thead');
         var trh = document.createElement('tr');
         ['名稱', '角色', '可看門市', '通行碼', ''].forEach(function (h) { trh.appendChild(el('th', null, h)); });
@@ -9547,8 +9805,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
               return;
             }
             if (r.role === '填寫者' && (!r.stores || !r.stores.length)) { errEl.textContent = r.name + '：填寫者至少要選一家可看門市'; return; }
-            if (seen[r.name]) { errEl.textContent = '使用者名稱重複：' + r.name; return; }
-            seen[r.name] = true;
+            var seenKey = window.PnlPasscodeRules.normalizeUserName(r.name).toLowerCase();
+            if (seen[seenKey]) { errEl.textContent = '使用者名稱重複（不分大小寫）：' + r.name; return; }
+            seen[seenKey] = true;
             if (r.role === '管理者') adminCount++;
             if (App.name && r._origName === App.name) selfRow = r;
           }
@@ -9598,6 +9857,234 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           });
         });
         panel.appendChild(saveBtn);
+
+        renderInvitePanel(panel);
+      }
+
+      // ---- 邀請碼（invite-register，2026-09-28）-----------------------------
+      // 管理者產生一張邀請碼給同事，同事在登入頁「用邀請碼註冊」自己取帳號
+      // 名稱＋通行碼（見 gas/shell.html showRegister、gas/invite.js）。只能
+      // 發填寫者／檢視者、單次使用、預設 7 天；碼只在產生當下顯示一次（後端
+      // 只存雜湊，清單永遠看不到碼本身）。清單用獨立的 listInvites 讀，不跟
+      // getSettings 綁在一起——產生／撤銷之後只重抓清單，不會把使用者表格
+      // 正在編輯、還沒存檔的內容整個重新載入蓋掉。
+      function inviteTimeText_(iso) {
+        if (!iso) return '';
+        return String(iso).slice(0, 16).replace('T', ' ');
+      }
+
+      function inviteStoresText_(inv) {
+        if (inv.role === '檢視者') return '全部（檢視者）';
+        var ids = inv.stores || [];
+        if (ids.indexOf('ALL') !== -1) return '全部門市';
+        var nameById = {};
+        (state.data.stores || []).forEach(function (st) { nameById[st.store_id] = st.name; });
+        return ids.map(function (id) { return nameById[id] ? id + ' ' + nameById[id] : id; }).join('、') || '無';
+      }
+
+      function showInviteOnceModal(inv) {
+        showConfirmModal('邀請碼（只顯示這一次）', function (card) {
+          card.appendChild(el('div', null, '角色：' + inv.role + '　可看門市：' + inviteStoresText_(inv)));
+          card.appendChild(el('div', null, '到期：' + inviteTimeText_(inv.expires_at) + '（' + inv.days + ' 天內有效，只能用一次）'));
+          var box = el('div', 'passcode-box', inv.code);
+          box.id = 'inviteCodeBox';
+          card.appendChild(box);
+          var copyRow = el('div', 'invite-copy-row');
+          var copyBtn = el('button', 'btn-small', '複製邀請碼');
+          copyBtn.type = 'button';
+          copyBtn.id = 'inviteCopyBtn';
+          copyBtn.addEventListener('click', function () {
+            var done = function () { showToast('已複製邀請碼'); };
+            var fail = function () { showToast('無法自動複製，請手動抄下'); };
+            try {
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(inv.code).then(done, fail);
+              } else {
+                fail();
+              }
+            } catch (e) { fail(); }
+          });
+          copyRow.appendChild(copyBtn);
+          card.appendChild(copyRow);
+          card.appendChild(el('div', 'field-inline-error', '請立即複製或抄下，交給同事在登入頁按「用邀請碼註冊」使用；關閉後不會再顯示。'));
+        }, function () { return Promise.resolve(); }, { confirmLabel: '已抄下，關閉', hideCancel: true });
+      }
+
+      function renderInvitePanel(panel) {
+        var wrap = el('div', 'invite-section');
+        wrap.id = 'inviteSection';
+        var title = el('div', 'settings-section-title', '邀請碼');
+        title.id = 'inviteTitle';
+        wrap.appendChild(title);
+        wrap.appendChild(el('div', 'field-hint', '產生一張邀請碼給同事，他在登入頁按「用邀請碼註冊」自己設定帳號名稱與通行碼。只能發填寫者或檢視者；每張只能用一次；碼只會顯示一次。'));
+
+        var form = el('div', 'invite-form');
+        var roleWrap = el('div');
+        var roleLabel = el('label', null, '角色');
+        roleLabel.setAttribute('for', 'inviteRole');
+        var roleSelect = document.createElement('select');
+        roleSelect.id = 'inviteRole';
+        ['填寫者', '檢視者'].forEach(function (r) {
+          var opt = document.createElement('option');
+          opt.value = r; opt.textContent = r;
+          roleSelect.appendChild(opt);
+        });
+        roleWrap.appendChild(roleLabel);
+        roleWrap.appendChild(document.createElement('br'));
+        roleWrap.appendChild(roleSelect);
+        form.appendChild(roleWrap);
+
+        var daysWrap = el('div');
+        var daysLabel = el('label', null, '有效期');
+        daysLabel.setAttribute('for', 'inviteDays');
+        var daysSelect = document.createElement('select');
+        daysSelect.id = 'inviteDays';
+        [1, 3, 7, 14].forEach(function (d) {
+          var opt = document.createElement('option');
+          opt.value = String(d); opt.textContent = d + ' 天';
+          if (d === 7) opt.selected = true;
+          daysSelect.appendChild(opt);
+        });
+        daysWrap.appendChild(daysLabel);
+        daysWrap.appendChild(document.createElement('br'));
+        daysWrap.appendChild(daysSelect);
+        form.appendChild(daysWrap);
+
+        var storesWrap = el('div', 'invite-stores');
+        storesWrap.id = 'inviteStores';
+        storesWrap.appendChild(el('div', 'field-hint', '可看門市（填寫者必選）'));
+        var allLbl = document.createElement('label');
+        var allCb = document.createElement('input');
+        allCb.type = 'checkbox';
+        allCb.id = 'inviteStoreAll';
+        allLbl.appendChild(allCb);
+        allLbl.appendChild(document.createTextNode(' 全部門市'));
+        storesWrap.appendChild(allLbl);
+        var storeCbs = [];
+        (state.data.stores || []).filter(function (st) { return st.active; }).forEach(function (st) {
+          var lbl = document.createElement('label');
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.id = 'inviteStore-' + st.store_id;
+          cb.value = st.store_id;
+          lbl.appendChild(cb);
+          lbl.appendChild(document.createTextNode(' ' + st.store_id + ' ' + st.name));
+          storesWrap.appendChild(lbl);
+          storeCbs.push(cb);
+        });
+        allCb.addEventListener('change', function () {
+          storeCbs.forEach(function (cb) { cb.disabled = allCb.checked; });
+        });
+        form.appendChild(storesWrap);
+
+        roleSelect.addEventListener('change', function () {
+          storesWrap.classList.toggle('hidden', roleSelect.value !== '填寫者');
+        });
+
+        var createBtn = el('button', 'btn-secondary', '產生邀請碼');
+        createBtn.type = 'button';
+        createBtn.id = 'inviteCreateBtn';
+        createBtn.style.width = 'auto';
+        form.appendChild(createBtn);
+        wrap.appendChild(form);
+
+        var errEl = errorEl('');
+        errEl.id = 'inviteError';
+        wrap.appendChild(errEl);
+
+        var listWrap = el('div', 'table-wrap');
+        listWrap.id = 'inviteList';
+        wrap.appendChild(listWrap);
+        panel.appendChild(wrap);
+
+        function renderList() {
+          listWrap.innerHTML = '';
+          var data = state.invites;
+          if (!data) {
+            title.textContent = '邀請碼';
+            listWrap.appendChild(el('div', 'empty-state', '邀請碼清單載入中…'));
+            return;
+          }
+          title.textContent = '邀請碼（未使用 ' + data.unused_count + ' 張）';
+          if (!data.invites.length) {
+            listWrap.appendChild(el('div', 'empty-state', '還沒有產生過邀請碼'));
+            return;
+          }
+          var table = document.createElement('table');
+          table.className = 'invite-table';
+          table.id = 'inviteTable';
+          var thead = document.createElement('thead');
+          var trh = document.createElement('tr');
+          ['建立時間', '角色', '門市', '到期', '狀態', ''].forEach(function (h) { trh.appendChild(el('th', null, h)); });
+          thead.appendChild(trh);
+          table.appendChild(thead);
+          var tbody = document.createElement('tbody');
+          data.invites.forEach(function (inv) {
+            var tr = document.createElement('tr');
+            tr.setAttribute('data-invite-id', inv.invite_id);
+            tr.appendChild(el('td', null, inviteTimeText_(inv.created_at)));
+            tr.appendChild(el('td', null, inv.role));
+            tr.appendChild(el('td', null, inviteStoresText_(inv)));
+            tr.appendChild(el('td', null, inviteTimeText_(inv.expires_at)));
+            var statusText = inv.status;
+            if (inv.status === '已使用') statusText = '已使用（' + inv.used_by + '，' + inviteTimeText_(inv.used_at) + '）';
+            tr.appendChild(el('td', inv.status === '未使用' ? 'invite-status-unused' : 'invite-status-muted', statusText));
+            var actTd = document.createElement('td');
+            if (inv.status === '未使用') {
+              var revokeBtn = el('button', 'btn-danger', '撤銷');
+              revokeBtn.type = 'button';
+              revokeBtn.addEventListener('click', function () {
+                showConfirmModal('撤銷邀請碼', function (card) {
+                  card.appendChild(el('div', null, '撤銷後這張邀請碼（' + inv.role + '，建立於 ' + inviteTimeText_(inv.created_at) + '）就不能再用來註冊。'));
+                }, function () {
+                  return call('revokeInvite', { invite_id: inv.invite_id }).then(function () {
+                    showToast('邀請碼已撤銷');
+                    loadInvites();
+                  });
+                }, { confirmLabel: '確認撤銷' });
+              });
+              actTd.appendChild(revokeBtn);
+            }
+            tr.appendChild(actTd);
+            tbody.appendChild(tr);
+          });
+          table.appendChild(tbody);
+          listWrap.appendChild(table);
+        }
+
+        function loadInvites() {
+          call('listInvites', {}).then(function (data) {
+            state.invites = data;
+            if (document.body.contains(listWrap)) renderList();
+          }).catch(function (err) {
+            if (document.body.contains(listWrap)) {
+              listWrap.innerHTML = '';
+              listWrap.appendChild(el('div', 'field-inline-error', '邀請碼清單載入失敗：' + errorMessage(err)));
+            }
+          });
+        }
+
+        createBtn.addEventListener('click', function () {
+          errEl.textContent = '';
+          var role = roleSelect.value;
+          var stores = [];
+          if (role === '填寫者') {
+            stores = allCb.checked ? ['ALL'] : storeCbs.filter(function (cb) { return cb.checked; }).map(function (cb) { return cb.value; });
+            if (!stores.length) { errEl.textContent = '填寫者至少要選一家可看門市'; return; }
+          }
+          createBtn.disabled = true;
+          call('createInvite', { role: role, stores: stores, days: Number(daysSelect.value) }).then(function (inv) {
+            createBtn.disabled = false;
+            showInviteOnceModal(inv);
+            loadInvites();
+          }).catch(function (err) {
+            createBtn.disabled = false;
+            errEl.textContent = errorMessage(err);
+          });
+        });
+
+        renderList();
+        if (!state.invites) loadInvites();
       }
 
       // ---- 連接器 ----------------------------------------------------------
