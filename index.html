@@ -2917,10 +2917,16 @@
   // 新增「是否估算」欄：科目本身金額來自 estimates 就標「是」，否則空白；
   // 人事小計、營業淨利、稅後淨利只要牽涉到任何估算科目，也一併標「是」，
   // 讓看報表的人一眼知道這幾個數字不是定案的真實數字。
+  // T18d（成本估算追加）：result.block_estimates（若有，見 gas/api.js
+  // attachCostEstimatesIfApplicable_／gas/costEstimate.js）是
+  // {區塊: {amount, basis}}——食材／包材整區塊被估算值取代時才會出現，跟
+  // result.estimates（逐科目）是兩種不同粒度的估算標記，這裡一併考慮，
+  // 「是否估算」欄與 hasAnyEstimate 才不會漏掉區塊層級的估算。
   function buildPnlCsvRows(accounts, result) {
     var revenue = (result.blocks && typeof result.blocks['營收'] === 'number') ? result.blocks['營收'] : 0;
     var estimates = (result && result.estimates && typeof result.estimates === 'object') ? result.estimates : {};
-    var hasAnyEstimate = Object.keys(estimates).length > 0;
+    var blockEstimates = (result && result.block_estimates && typeof result.block_estimates === 'object') ? result.block_estimates : {};
+    var hasAnyEstimate = Object.keys(estimates).length > 0 || Object.keys(blockEstimates).length > 0;
 
     function pctText(amount) {
       if (typeof amount !== 'number' || !isFinite(amount) || revenue === 0) return '';
@@ -2954,6 +2960,7 @@
         ]);
       });
       var blockTotal = (result.blocks && typeof result.blocks[block] === 'number') ? result.blocks[block] : 0;
+      if (Object.prototype.hasOwnProperty.call(blockEstimates, block)) blockHasEstimate = true;
       rows.push([textCell(block), '', textCell('小計'), '', numCell(blockTotal, 2), textCell(pctText(blockTotal)), textCell(blockHasEstimate ? '是' : '')]);
     });
 
@@ -5863,9 +5870,38 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       var hasEstimate = !!(result.estimates && Object.keys(result.estimates).length);
       var estimateBasis = result.estimate_basis;
       var laborKpiLabel = '人事' + (hasEstimate ? '（估）' : '');
-      var netProfitKpiLabel = '稅後淨利' + (hasEstimate ? '（含估算）' : '');
+
+      // T18d（成本估算）：result.block_estimates（食材／包材整區塊，見
+      // gas/costEstimate.js computeBlockCostEstimates_）與
+      // result.cost_estimate_basis（水電瓦斯／抽成固定費，逐科目，見
+      // gas/api.js attachCostEstimatesIfApplicable_）——跟人事估算是各自
+      // 獨立附加的欄位，「稅後淨利（含估算）」只要任一種估算存在就要標。
+      var blockEstimates = result.block_estimates || {};
+      var hasBlockEstimate = !!Object.keys(blockEstimates).length;
+      var costEstimateBasis = result.cost_estimate_basis || {};
+      var hasCostAccEstimate = !!Object.keys(costEstimateBasis).length;
+      var hasAnyEstimate = hasEstimate || hasBlockEstimate || hasCostAccEstimate;
+      var netProfitKpiLabel = '稅後淨利' + (hasAnyEstimate ? '（含估算）' : '');
+      var foodCostKpiLabel = '食材成本（含包材）' + (hasBlockEstimate ? '（估）' : '');
+      var controlExpenseLabel = '可控費用' + (hasCostAccEstimate ? '（估）' : '');
+
       if (hasEstimate && estimateBasis && estimateBasis.label) {
         dashBody.appendChild(el('div', 'mismatch-note', '人事估算：' + estimateBasis.label));
+      }
+      ['食材', '包材'].forEach(function (block) {
+        var est = blockEstimates[block];
+        if (est && est.label) {
+          dashBody.appendChild(el('div', 'mismatch-note', block + '估算：' + est.label));
+        }
+      });
+      if (hasCostAccEstimate) {
+        var costLabels = Object.keys(costEstimateBasis)
+          .map(function (accId) {
+            var b = costEstimateBasis[accId];
+            return (accountName ? accountName(accId) : accId) + '：' + (b && b.label ? b.label : '');
+          })
+          .join('；');
+        if (costLabels) dashBody.appendChild(el('div', 'mismatch-note', '費用估算：' + costLabels));
       }
 
       var kpiRow = el('div', 'kpi-row');
@@ -5877,7 +5913,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         iconKind: 'revenue', iconBg: 'var(--brand)'
       }));
       kpiRow.appendChild(buildKpiCard({
-        label: '食材成本（含包材）', value: foodCost,
+        label: foodCostKpiLabel, value: foodCost,
         badgeInfo: badgeInfoFor(foodCost, prevFoodCost),
         trend: trend, isAllView: isAll, forceZeroMin: true, color: '#a3781f',
         valueFn: function (r) { return safeNum(r.blocks && r.blocks['食材']) + safeNum(r.blocks && r.blocks['包材']); },
@@ -5914,7 +5950,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         return card;
       }
 
-      expenseGrid.appendChild(expenseCard('可控費用', blocks['可控']));
+      expenseGrid.appendChild(expenseCard(controlExpenseLabel, blocks['可控']));
       expenseGrid.appendChild(expenseCard('不可控費用', blocks['不可控']));
       var opCard = el('div', 'expense-card');
       opCard.appendChild(el('div', 'name', '營業淨利'));
