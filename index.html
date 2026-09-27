@@ -550,6 +550,9 @@
     margin: -8px 0 14px;
   }
 
+  /* speed-switch：先顯示快取、背景重抓中的提示 */
+  .refreshing-note { color: #8a5200; font-weight: 700; }
+
   .hero-card {
     background: var(--card);
     border-radius: var(--radius);
@@ -1793,6 +1796,10 @@
      跟 status-filled 同一套配色（意義上就是「已填」的一種，只是要跟
      真正的連接器帶入區分開來）。 */
   .status-pill.status-manual { background: #e4f3e8; color: var(--up); }
+  /* polish-v14：估算（打卡工時／上月日均／固定費攤提…）——跟待補（紅）與
+     已填（綠）都不同的琥珀色，#8a5200 對 #fff3dc 對比約 6.4:1。 */
+  .status-pill.status-estimated,
+  .status-pill.status-estimated_overlay { background: #fff3dc; color: #8a5200; }
 
   .accounts-table td.num, .accounts-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
@@ -2931,17 +2938,34 @@
     return s;
   }
 
+  // polish-v14（ALL CSV 與畫面差 0.01 的根因）：原本用 n.toFixed(2)，它捨入的
+  // 是「二進位近似值」——1.005 實際存成 1.00499999…，toFixed 得 "1.00"；多店
+  // 合計時加總順序不同（店序、引擎內加總順序），尾差方向就不同，同一個十進
+  // 位上剛好 x.xx5 的金額會一邊印 .x2、一邊印 .x3。改成先把「元×10^d」對齊
+  // 到 1e-4（吸收浮點尾差，真實金額不會有 1/10000 分以下的有效位），再四捨
+  // 五入（遠離 0）。回傳整數（例如 d=2 就是「分」）；儀表板 fmtInt 也改用這
+  // 支先到分再到元，畫面與 CSV 同一套捨入。
+  function roundScaled(n, decimals) {
+    var scale = Math.pow(10, decimals);
+    var neg = n < 0;
+    var c = Math.abs(n) * scale;
+    c = Math.round(c * 1e4) / 1e4;
+    var r = Math.round(c);
+    return neg && r !== 0 ? -r : r;
+  }
+
   // 金額／數量欄：一律不做 injection 防護（規則明訂「金額欄是數字，負數
   // 不加」），非有限數字回傳空字串（沒有值可顯示，避免印出 "NaN"）。
-  // Fable 對抗審查建議 5：|n| < 0.005 先正規化成正零，否則像 -0.001 這種
-  // 極小負數，toFixed(2) 在 JS 引擎裡會印出「-0.00」（帶負號的零，會計看
-  // 了以為系統又算出一個負數，其實只是浮點數尾差）；理論上 0.00 跟
-  // -0.00 在會計上完全等價，但顯示上不該讓人多想。
+  // Fable 對抗審查建議 5：極小負數（捨入後為 0）一律印正零，不印「-0.00」。
   function numCell(n, decimals) {
     decimals = decimals === undefined ? 2 : decimals;
     if (typeof n !== 'number' || !isFinite(n)) return '';
-    if (Math.abs(n) < 0.005) n = 0;
-    return n.toFixed(decimals);
+    var r = roundScaled(n, decimals);
+    var neg = r < 0;
+    var a = String(Math.abs(r));
+    if (decimals <= 0) return (neg ? '-' : '') + a;
+    while (a.length <= decimals) a = '0' + a;
+    return (neg ? '-' : '') + a.slice(0, a.length - decimals) + '.' + a.slice(a.length - decimals);
   }
 
   // RFC 4180：欄位含逗號／雙引號／換行（\r 或 \n）就整格用雙引號包起來，
@@ -2984,6 +3008,56 @@
     return prefix + '_' + sanitizeFilenamePart(storeLabel) + '_' + month + '.csv';
   }
 
+  // ---- polish-v14：估算科目 → 來源文字（儀表板「科目明細」表與損益表 CSV
+  // 「是否估算」欄共用同一份判斷，兩邊才不會各算各的對不上）----------------
+  // result 上三種估算附加欄位（見 gas/api.js）：
+  //   - estimates {acc_id: 金額}：人事（basis 在 estimate_basis，單一物件）
+  //     ＋水電瓦斯／抽成固定費（basis 在 cost_estimate_basis[acc_id]）。
+  //   - block_estimates {區塊: basis}：食材／包材區塊層級調整，basis.acc_ids
+  //     是這次估算涵蓋的廠商月結類＋庫存科目；只標其中「本月仍待補」的科目
+  //     （已有真實值的科目列顯示的是真實數字，不能標估算）。
+  // 回傳 {acc_id: {source, sourceText, blockLevel}}；沒有估算回 {}。
+  var ESTIMATE_SOURCE_TEXT = {
+    labor_clock: '估算（打卡工時）',
+    ratio: '估算（歷史比例）',
+    vendor_daily_avg: '估算（參考月日均）',
+    utility_daily_avg: '估算（上月日均）',
+    const_prorate: '估算（固定費攤提）'
+  };
+
+  function estimateSourceText(source) {
+    return ESTIMATE_SOURCE_TEXT[source] || '估算';
+  }
+
+  function estimateInfoByAcc(result) {
+    var out = {};
+    if (!result || typeof result !== 'object') return out;
+    var estimates = (result.estimates && typeof result.estimates === 'object') ? result.estimates : {};
+    var costBasis = (result.cost_estimate_basis && typeof result.cost_estimate_basis === 'object') ? result.cost_estimate_basis : {};
+    var laborBasis = (result.estimate_basis && typeof result.estimate_basis === 'object') ? result.estimate_basis : null;
+    var pendingSet = {};
+    var hasPendingList = Array.isArray(result.pending);
+    (hasPendingList ? result.pending : []).forEach(function (id) { pendingSet[id] = true; });
+    Object.keys(estimates).forEach(function (accId) {
+      var basis = Object.prototype.hasOwnProperty.call(costBasis, accId) ? costBasis[accId] : laborBasis;
+      var source = basis && basis.source ? String(basis.source) : '';
+      // Fable 審查 #52 輕：科目本月已有真實值（不在待補）、估算是疊加上去的
+      // （例如抽成公式科目的固定費攤提）→ overlay，儀表板徽章改「含估算」。
+      var overlay = hasPendingList && !pendingSet[accId];
+      out[accId] = { source: source, sourceText: estimateSourceText(source), blockLevel: false, overlay: overlay };
+    });
+    var blockEstimates = (result.block_estimates && typeof result.block_estimates === 'object') ? result.block_estimates : {};
+    Object.keys(blockEstimates).forEach(function (block) {
+      var basis = blockEstimates[block] || {};
+      var source = basis.source ? String(basis.source) : 'vendor_daily_avg';
+      (Array.isArray(basis.acc_ids) ? basis.acc_ids : []).forEach(function (accId) {
+        if (!pendingSet[accId] || out[accId]) return;
+        out[accId] = { source: source, sourceText: estimateSourceText(source), blockLevel: true, overlay: false };
+      });
+    });
+    return out;
+  }
+
   // ---- 「下載損益表 CSV」------------------------------------------------
   // accounts：科目陣列（App.accounts，含 acc_id/block/name/mode/in_pnl/active/sort）。
   // result：getMonth 回來的 result（單店或 ALL 合計皆可，形狀一致）。
@@ -3007,6 +3081,7 @@
     var revenue = (result.blocks && typeof result.blocks['營收'] === 'number') ? result.blocks['營收'] : 0;
     var estimates = (result && result.estimates && typeof result.estimates === 'object') ? result.estimates : {};
     var blockEstimates = (result && result.block_estimates && typeof result.block_estimates === 'object') ? result.block_estimates : {};
+    var estimateInfo = estimateInfoByAcc(result);
     var hasAnyEstimate = Object.keys(estimates).length > 0 || Object.keys(blockEstimates).length > 0;
 
     function pctText(amount) {
@@ -3033,7 +3108,7 @@
       blockAccounts.forEach(function (a) {
         var amountRaw = result.accounts ? result.accounts[a.acc_id] : undefined;
         var amount = typeof amountRaw === 'number' ? amountRaw : 0;
-        var isEstimate = Object.prototype.hasOwnProperty.call(estimates, a.acc_id);
+        var isEstimate = Object.prototype.hasOwnProperty.call(estimateInfo, a.acc_id);
         if (isEstimate) blockHasEstimate = true;
         rows.push([
           textCell(block), textCell(a.acc_id), textCell(a.name), textCell(a.mode),
@@ -3146,6 +3221,7 @@
   return {
     textCell: textCell,
     numCell: numCell,
+    roundScaled: roundScaled,
     escapeCsvField: escapeCsvField,
     buildCsv: buildCsv,
     withBom: withBom,
@@ -3155,6 +3231,8 @@
     effectiveSplitMonths: effectiveSplitMonths,
     isBadSplitMonths: isBadSplitMonths,
     buildPnlCsvRows: buildPnlCsvRows,
+    estimateInfoByAcc: estimateInfoByAcc,
+    estimateSourceText: estimateSourceText,
     buildEntriesCsvRows: buildEntriesCsvRows,
     PNL_BLOCKS: PNL_BLOCKS
   };
@@ -4163,15 +4241,69 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       var el = document.getElementById('progressBar');
       if (el) el.classList.add('hidden');
     }
-    function call(action, req) {
+    // ---- speed-switch：儀表板讀取快取（只放記憶體，不寫 localStorage／
+    // sessionStorage——財務資料不落地，關掉分頁就沒了）。
+    // - 鍵由呼叫端決定（儀表板用 store_id|month）；整個快取綁「目前這把
+    //   token」：token 換了（登出、換帳號、重新登入、改通行碼重簽）第一次
+    //   存取就整包清空，所以不會跨使用者／角色。showLogin 也會主動清。
+    // - 任何不在 READ_ONLY_ACTIONS 的 action（新增／作廢明細、匯入、定稿／
+    //   解鎖、建立草稿、拉取連接器、設定存檔、邀請碼…）一送出就清空、回應
+    //   後再清一次（不論成功失敗——失敗也可能已部分寫入），寫入後不會再看到
+    //   舊數字。新增寫入 action 不用記得來這裡登記，預設就是「會清」。
+    // - 最多留 DASH_CACHE_MAX 組（依最後使用時間淘汰），避免長時間開著無限長大。
+    var READ_ONLY_ACTIONS = { getMonth: 1, getTrend: 1, getSettings: 1, listInvites: 1, exportEntries: 1, getAttachment: 1 };
+    var DASH_CACHE_MAX = 24;
+    var dashCache = { owner: null, map: {}, order: [] };
+    function dashCacheCheckOwner_() {
+      if (dashCache.owner !== App.token) {
+        dashCache = { owner: App.token, map: {}, order: [] };
+      }
+    }
+    window.PnlDashCache = {
+      get: function (key) {
+        dashCacheCheckOwner_();
+        if (!App.token) return null;
+        return Object.prototype.hasOwnProperty.call(dashCache.map, key) ? dashCache.map[key] : null;
+      },
+      // tokenAtRequest：這筆資料是用哪把 token 抓的；跟現在的不同（抓的途中
+      // 已經登出／換人）就丟掉，不寫進新使用者的快取。
+      // genAtRequest：送出請求當下的 generation；途中若有任何寫入（generation
+      // 已經 +1），這份回應可能是寫入前的舊數字，不收。
+      set: function (key, value, tokenAtRequest, genAtRequest) {
+        dashCacheCheckOwner_();
+        if (!App.token || tokenAtRequest !== App.token) return;
+        if (genAtRequest !== window.PnlDashCache.generation) return;
+        dashCache.map[key] = value;
+        dashCache.order = dashCache.order.filter(function (k) { return k !== key; });
+        dashCache.order.push(key);
+        while (dashCache.order.length > DASH_CACHE_MAX) {
+          delete dashCache.map[dashCache.order.shift()];
+        }
+      },
+      has: function (key) { return !!window.PnlDashCache.get(key); },
+      clear: function () { dashCache = { owner: App.token, map: {}, order: [] }; },
+      size: function () { dashCacheCheckOwner_(); return dashCache.order.length; },
+      generation: 0
+    };
+    function invalidateDashCache_() {
+      window.PnlDashCache.clear();
+      window.PnlDashCache.generation++;
+    }
+
+    // opts.background：預取用——不觸發 1.5 秒慢速進度條（使用者沒在等它）。
+    function call(action, req, opts) {
+      opts = opts || {};
+      var isWrite = !READ_ONLY_ACTIONS[action];
+      if (isWrite) invalidateDashCache_();
       var fired = false;
-      var timer = setTimeout(function () {
+      var timer = opts.background ? null : setTimeout(function () {
         fired = true;
         slowCallCount++;
         showProgressBar();
       }, SLOW_CALL_THRESHOLD_MS);
       function settle() {
-        clearTimeout(timer);
+        if (timer) clearTimeout(timer);
+        if (isWrite) invalidateDashCache_();
         if (fired) {
           slowCallCount = Math.max(0, slowCallCount - 1);
           if (slowCallCount === 0) hideProgressBar();
@@ -4417,6 +4549,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       App.name = '';
       App.role = '';
       App.stores = [];
+      invalidateDashCache_(); // speed-switch：登出／AUTH 一律清空讀取快取
       pendingOldPass = null; // T20：AUTH／登出當下可能正卡在強制換碼畫面，清掉殘留狀態
       mustChangeMode = null;
       renderShellDom();
@@ -5207,7 +5340,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     BAD_SPLIT: '分攤月數格式錯，已當 1 個月處理'
   };
 
-  var STATUS_LABEL = { filled: '已填', pending: '待補', connector: '連接器', zero: '確認為0', manual: '手動' };
+  var STATUS_LABEL = { filled: '已填', pending: '待補', connector: '連接器', zero: '確認為0', manual: '手動', estimated: '估算', estimated_overlay: '含估算' };
 
   // ---- 小工具：建 DOM 節點（textContent，不碰 innerHTML）----
   function el(tag, className, text) {
@@ -5224,7 +5357,12 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   // ---- 格式化（只在這裡四捨五入，App/engine 內部一律保留完整精度）----
   function fmtInt(n) {
     if (typeof n !== 'number' || !isFinite(n)) return '—';
-    var r = Math.round(n);
+    // polish-v14（Fable 審查中1）：單次捨入到元，用跟 CSV 同一支
+    // src/csv.js roundScaled（先吸收浮點尾差，.5 遠離 0）；不能先到分再到元
+    // （12.495→12.50→13 會雙重捨入）。CSV 則是 roundScaled(n, 2)。
+    var r = (window.PnlCsv && window.PnlCsv.roundScaled)
+      ? window.PnlCsv.roundScaled(n, 0)
+      : Math.round(n);
     var neg = r < 0;
     var s = String(Math.abs(r)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     return (neg ? '−' : '') + s;
@@ -5843,7 +5981,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   // account.mode 判斷連接器、其餘一律當「已填」（沒有明細可以細分來源）。
   // item 3 預設排序：待補在前，其後依區塊、金額大到小。
   function compareAccountRows(x, y) {
-    var xPending = x.status === 'pending', yPending = y.status === 'pending';
+    var xPending = x.pending === true, yPending = y.pending === true;
     if (xPending !== yPending) return xPending ? -1 : 1;
     if (x.block !== y.block) return x.block < y.block ? -1 : 1;
     var xAmt = typeof x.amount === 'number' ? x.amount : -Infinity;
@@ -5869,6 +6007,11 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     });
 
     var revenue = safeNum(result.blocks && result.blocks['營收']);
+    // polish-v14：估算科目（人事、食材包材區塊、水電瓦斯、抽成攤提）——跟
+    // 損益表 CSV「是否估算」欄共用 src/csv.js estimateInfoByAcc，兩邊同一組
+    // 科目。ALL 視圖後端不附加估算欄位，自然是空物件。
+    var estimateInfo = (!isAllView && window.PnlCsv && window.PnlCsv.estimateInfoByAcc)
+      ? window.PnlCsv.estimateInfoByAcc(result) : {};
 
     return accounts
       .filter(function (a) { return a.active === true; })
@@ -5876,7 +6019,13 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         var amount = result.accounts ? result.accounts[a.acc_id] : undefined;
         var accEntries = entriesByAcc[a.acc_id] || [];
         var status, source;
-        if (pendingSet[a.acc_id]) {
+        var est = estimateInfo[a.acc_id];
+        if (est) {
+          // 估算不是真實明細：徽章「估算」（與待補不同色），來源寫估算依據；
+          // 若本月仍無真實明細（在 pending 裡），「只看待補」照樣篩得到。
+          status = est.overlay ? 'estimated_overlay' : 'estimated';
+          source = est.sourceText + (est.blockLevel ? '，計入區塊小計' : '') + (est.overlay ? '（疊加於實際值）' : '');
+        } else if (pendingSet[a.acc_id]) {
           status = 'pending';
           source = '—';
         } else if (accEntries.some(function (e) { return e.source === '確認為0'; })) {
@@ -5910,7 +6059,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         }
         return {
           acc_id: a.acc_id, name: a.name, block: a.block,
-          amount: amount, status: status, source: source,
+          amount: amount, status: status, source: source, pending: !!pendingSet[a.acc_id],
           pct: fmtPct1(safeNum(amount), revenue)
         };
       })
@@ -5940,7 +6089,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     function filteredRows() {
       return allRows.filter(function (r) {
         if (state.block !== '全部' && r.block !== state.block) return false;
-        if (state.pendingOnly && r.status !== 'pending') return false;
+        // polish-v14：「只看待補」維持待補語意——估算科目本月仍沒有真實明細
+        // （r.pending）也算待補，只是徽章顯示「估算」；已有真實值、另外疊加
+        // 估算的科目（例如抽成公式的固定費攤提）不在待補裡，不列。
+        if (state.pendingOnly && !r.pending) return false;
         return true;
       });
     }
@@ -6257,6 +6409,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       // ALL 逐筆），這裡只存 store_id/month 給它用。空月份（monthIsEmpty）
       // 也照樣記下來、照樣可以下載（下載出一份只有表頭/小計 0 的 CSV）。
       lastLoaded = { store_id: requestStore, month: requestMonth, result: result, entries: data.entries || [] };
+      dashBody.setAttribute('data-rendered', requestStore + '|' + requestMonth); // speed-switch：e2e 量測切換到顯示的時間用
       downloadPnlCsvBtn.disabled = false;
       downloadEntriesCsvBtn.disabled = false;
       document.getElementById('downloadSelect').disabled = false;
@@ -6534,32 +6687,117 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     }
 
     var loadSeq = 0; // 請求序號：切店／切月太快時，只讓「最後一次」的回應畫面
+    // speed-switch：切換門市／月份時先用記憶體快取（window.PnlDashCache，見
+    // shell.html）立即顯示並標「更新中…」，背景重抓後替換；畫完後背景依序預取
+    // 「上個月」與「其他可看門市同月」。Apps Script 每次往返本身就要數秒（平台
+    // 開銷為主），重點是少等、先顯示。
+    var dashCache = window.PnlDashCache || null;
+    var PREFETCH_MAX = 3;
+    function cacheKey(store, month) { return store + '|' + month; }
+
+    function fetchPair(store, month, opts) {
+      return Promise.all([
+        call('getMonth', { store_id: store, month: month }, opts),
+        call('getTrend', { store_id: store, month: month, n: 12 }, opts)
+      ]);
+    }
+
+    // Fable 審查 #53 輕：畫面是快取、背景還在重抓（「更新中…」）時停用兩顆
+    // 下載鈕，避免下載到可能過期的數字；背景回來畫好後再啟用。重抓失敗時維
+    // 持停用（畫面是舊資料），按「重試」成功後才恢復。
+    function setDownloadsEnabled(on) {
+      downloadPnlCsvBtn.disabled = !on;
+      downloadEntriesCsvBtn.disabled = !on;
+      document.getElementById('downloadSelect').disabled = !on;
+    }
+
+    function setRefreshing(on) {
+      var statusEl = document.getElementById('monthStatus');
+      if (!statusEl) return;
+      var note = document.getElementById('refreshingNote');
+      if (on) {
+        if (!note) {
+          note = el('span', 'refreshing-note', '　更新中…');
+          note.id = 'refreshingNote';
+          statusEl.appendChild(note);
+        }
+      } else if (note && note.parentNode) {
+        note.parentNode.removeChild(note);
+      }
+    }
+
     function load() {
       var seq = ++loadSeq;
       var requestStore = storeSelect.value;
       var requestMonth = monthSelect.value;
-      if (!hasRenderedOnce) {
+      var key = cacheKey(requestStore, requestMonth);
+      var tokenAtRequest = App.token;
+      var genAtRequest = dashCache ? dashCache.generation : 0;
+      var cached = dashCache ? dashCache.get(key) : null;
+      hideRetry();
+      if (cached) {
+        hasRenderedOnce = true;
+        renderBody(cached.month, cached.trend, requestStore, requestMonth);
+        setRefreshing(true);
+        setDownloadsEnabled(false);
+      } else if (!hasRenderedOnce) {
         dashBody.innerHTML = '';
         dashBody.appendChild(el('div', 'pending-empty', '載入中…'));
       }
-      hideRetry();
-      Promise.all([
-        call('getMonth', { store_id: requestStore, month: requestMonth }),
-        call('getTrend', { store_id: requestStore, month: requestMonth, n: 12 })
-      ]).then(function (results) {
+      fetchPair(requestStore, requestMonth).then(function (results) {
+        if (dashCache) dashCache.set(key, { month: results[0], trend: results[1] }, tokenAtRequest, genAtRequest);
         if (seq !== loadSeq) return; // 使用者在回應回來前又切了一次，這筆回應已經過期
         if (!document.body.contains(dashBody)) return;
         hasRenderedOnce = true;
-        renderBody(results[0], results[1], requestStore, requestMonth);
+        // 快取內容跟新抓的一模一樣就不重畫（保留科目明細表的篩選／分頁）。
+        if (!(cached && JSON.stringify(cached.month) === JSON.stringify(results[0]) &&
+              JSON.stringify(cached.trend) === JSON.stringify(results[1]))) {
+          renderBody(results[0], results[1], requestStore, requestMonth);
+        }
+        setRefreshing(false);
+        setDownloadsEnabled(true);
+        schedulePrefetch(seq, requestStore, requestMonth);
       }).catch(function (err) {
         if (seq !== loadSeq) return;
         if (!document.body.contains(dashBody)) return;
+        setRefreshing(false);
         if (err && err.error === 'AUTH') {
           handleApiError(err);
           return;
         }
-        showRetry(errorMessage(err) || '載入失敗，請稍後再試', load);
+        showRetry((cached ? '更新失敗，畫面是先前載入的資料：' : '') + (errorMessage(err) || '載入失敗，請稍後再試'), load);
       });
+    }
+
+    // 預取：只從目前下拉選單裡「看得到的選項」挑（選單本身就是依角色建的：
+    // 填寫者只有自己的門市、沒有 ALL），另外一律不預取 ALL。序列化、一次一
+    // 個，最多 PREFETCH_MAX 個；使用者一切換（loadSeq 變了）就停。
+    function schedulePrefetch(seq, store, month) {
+      if (!dashCache) return;
+      var targets = [];
+      var prevMonth = shiftMonthStr(month, -1);
+      var monthOk = Array.prototype.some.call(monthSelect.options, function (o) { return o.value === prevMonth; });
+      if (store !== 'ALL' && monthOk) targets.push([store, prevMonth]);
+      Array.prototype.forEach.call(storeSelect.options, function (o) {
+        if (o.value !== 'ALL' && o.value !== store) targets.push([o.value, month]);
+      });
+      targets = targets.filter(function (t) { return !dashCache.has(cacheKey(t[0], t[1])); }).slice(0, PREFETCH_MAX);
+      var i = 0;
+      var tokenAtSchedule = App.token;
+      function next() {
+        // 使用者又切換了、或已登出／換帳號（token 變了）就停——不能拿新帳號
+        // 的 token 去打上一個帳號才看得到的門市。
+        if (seq !== loadSeq || i >= targets.length || App.token !== tokenAtSchedule || !App.token) return;
+        var t = targets[i++];
+        var tokenAtRequest = App.token;
+        var genAtRequest = dashCache.generation;
+        fetchPair(t[0], t[1], { background: true }).then(function (results) {
+          dashCache.set(cacheKey(t[0], t[1]), { month: results[0], trend: results[1] }, tokenAtRequest, genAtRequest);
+          next();
+        }).catch(function () { /* 預取失敗不打擾使用者，停止這一輪 */ });
+      }
+      // 讓畫面先畫完、瀏覽器閒下來再開始（低優先）。
+      setTimeout(next, 300);
     }
 
     function boot() {
@@ -8650,6 +8888,23 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       // Fable 審查 PR #50 中3：建立草稿／立即拉取共用——把 createDraft_／
       // refreshConnectors 回的 connectorFailures（已遮蔽）、warnings、timedOut
       // 組成一段純文字，呼叫端一律用 textContent 放進畫面。
+      // Fable 審查 #52 中2：草稿提醒改白話（textContent 顯示，不當 HTML）。
+      function formatDraftWarning_(w) {
+        var acc = w.acc_id || '';
+        if (w.code === 'MANUAL_EXISTS') {
+          var src = (w.existing_sources && w.existing_sources.length) ? '（' + w.existing_sources.join('／') + '）' : '';
+          return acc + ' 本月已有其他來源的值' + src + '，未自動帶入';
+        }
+        if (w.code === 'STALE_SAME_SOURCE') {
+          var had = (w.existing_amounts || []).join('、');
+          var splitNote = (w.expected_split_months && w.expected_split_months !== 1) ? '（分攤 ' + w.expected_split_months + ' 個月）' : '';
+          return acc + ' 本月的「' + (w.source || '') + '」是 ' + had + '，依目前設定應為 ' + w.expected_amount + splitNote +
+            '；沒有自動改，要更新請作廢那筆後再按建立草稿';
+        }
+        if (w.code === 'NO_FIXED') return acc + ' 是固定科目，但這家店沒設定固定值';
+        return w.code + (acc ? '(' + acc + ')' : '');
+      }
+
       function formatConnectorIssues_(res) {
         if (!res) return '';
         var parts = [];
@@ -8661,9 +8916,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         }
         var warns = res.warnings || [];
         if (warns.length) {
-          parts.push('提醒（' + warns.length + '）：' + warns.map(function (w) {
-            return w.code + (w.acc_id ? '(' + w.acc_id + ')' : '');
-          }).join('、'));
+          // polish-v14：createDraft_ 已把「同來源已存在」的冪等跳過移到
+          // idempotentSkipped（不列提醒），這裡剩下的 MANUAL_EXISTS 都是真
+          // 衝突；後端附 existing_sources 時一併顯示是被哪些來源擋下。
+          parts.push('提醒（' + warns.length + '）：' + warns.map(formatDraftWarning_).join('、'));
         }
         if (res.timedOut) parts.push('執行逾時，部分連接器未跑完，明天 06:30 每日更新會接續，或稍後再按一次');
         return parts.join('；');
