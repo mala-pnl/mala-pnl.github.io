@@ -3489,7 +3489,46 @@
 
   // ---- 分組欄比對（C5：完全相符 → 最長前綴 `xx*` → `"*"` → 未對應）------
 
+  // ---- import-accid（2026-09-28）：「分組欄的值就是科目代號」模式 ----------
+  // 範本 mapping 存保留值 { "@ACC_ID": "@ACC_ID" }（唯一一組）代表這個模式：
+  // 分組欄每列的值 trim＋大寫化後直接當 acc_id，不用逐列設對應。選這個存法
+  // 而不是在「匯入範本」分頁加新欄位，是為了不動分頁欄位（SHEET_SCHEMAS／
+  // setup 表頭檢查／光復正式表都不用遷移），舊範本完全不受影響；後端
+  // saveTemplatesTable_ 認得這個保留鍵（見 gas/apiWrite.js）。
+  var ACC_ID_DIRECT_KEY = '@ACC_ID';
+  var IMPORT_ALLOWED_MODES_ = { 匯入: true, 手動: true, 連接器: true }; // 跟 apiImportEntries_ 同一組
+
+  // Fable 審查 PR #54 輕 5：跟後端 saveTemplatesTable_ 一致——mapping 唯一
+  // 一組鍵、且值＝@ACC_ID 才算代號直入。
+  function isAccIdDirect(template) {
+    var m = template && template.mapping;
+    if (!m || typeof m !== 'object') return false;
+    var keys = Object.keys(m);
+    return keys.length === 1 && keys[0] === ACC_ID_DIRECT_KEY && m[ACC_ID_DIRECT_KEY] === ACC_ID_DIRECT_KEY;
+  }
+
+  // 輕 7：NFKC（全形英數「Ａ０１２」→「A012」）＋去掉所有空白（含內部、
+  // 全形空白、Tab）＋大寫化。
+  function normalizeAccIdCell(v) {
+    if (v === undefined || v === null) return '';
+    var str = String(v);
+    if (typeof str.normalize === 'function') str = str.normalize('NFKC');
+    return str.replace(/\s+/g, '').toUpperCase();
+  }
+
+  function isBlankRow(row) {
+    for (var i = 0; i < row.length; i++) {
+      var c = row[i];
+      if (c !== undefined && c !== null && String(c).trim() !== '') return false;
+    }
+    return true;
+  }
+
   function matchAccId(groupValue, template) {
+    if (isAccIdDirect(template)) {
+      var code = normalizeAccIdCell(groupValue);
+      return code || null; // 空白＝沒有代號，走「未對應」計數，預覽再列成無法對應
+    }
     var mapping = template.mapping || {};
     // group_col 空白＝全部列歸 "*"（模板本身沒有分組欄，不看儲存格內容）。
     if (!template.group_col) {
@@ -3573,6 +3612,8 @@
       skippedBadAmount: 0,
       skippedBadDate: 0,
       matchedRowCount: 0,
+      rowCounts: {}, // acc_id -> 對到的列數（代號直入模式的預覽要顯示）
+      skippedRows: [], // 代號直入模式：被略過的列 {row, code, reason}（中 3，預覽列出並擋送出）
       dayStrs: {}, // Set 用物件模擬（IE/舊環境保險，反正只是 key 存在判斷）
       missingColumns: [] // Fable 審查必修 #4
     };
@@ -3590,22 +3631,34 @@
     var dateIdx = colIndexOf(header, template.date_col);
     var amountIdx = colIndexOf(header, template.amount_col);
     var groupIdx = colIndexOf(header, template.group_col);
+    var direct = isAccIdDirect(template);
+    function skipRow(r, row, reason) {
+      if (!direct) return;
+      result.skippedRows.push({ row: r + 1, code: normalizeAccIdCell(groupIdx === -1 ? undefined : row[groupIdx]), reason: reason });
+    }
 
     for (var r = headerIdx + 1; r < rows2D.length; r++) {
       var row = rows2D[r];
       if (!row || row.length === 0) continue;
+      if (direct && isBlankRow(row)) continue; // 整列空白（SheetJS 讀出的空列）不算被略過
 
-      var amount = parseAmountCell(amountIdx === -1 ? undefined : row[amountIdx]);
+      var rawAmount = amountIdx === -1 ? undefined : row[amountIdx];
+      var amount = parseAmountCell(rawAmount);
       if (typeof amount !== 'number' || !isFinite(amount)) {
         result.skippedBadAmount++;
+        skipRow(r, row, '金額格式錯（' + (rawAmount === undefined || rawAmount === null || rawAmount === '' ? '空白' : String(rawAmount)) + '）');
         continue;
       }
 
       var dayStr = null;
       if (template.date_col) {
-        dayStr = cellToDayStr(dateIdx === -1 ? undefined : row[dateIdx]);
+        var rawDate = dateIdx === -1 ? undefined : row[dateIdx];
+        dayStr = cellToDayStr(rawDate);
         if (!dayStr || monthOfDayStr(dayStr) !== monthStr) {
           result.skippedBadDate++;
+          skipRow(r, row, !dayStr
+            ? '日期格式錯（' + (rawDate === undefined || rawDate === null || rawDate === '' ? '空白' : String(rawDate)) + '）'
+            : '日期不在 ' + monthStr + '（' + dayStr + '）');
           continue;
         }
       }
@@ -3615,10 +3668,12 @@
       if (!accId) {
         result.unmappedCount++;
         result.unmappedAmount += amount;
+        skipRow(r, row, '科目代號空白');
         continue;
       }
 
       result.sums[accId] = (result.sums[accId] || 0) + amount;
+      result.rowCounts[accId] = (result.rowCounts[accId] || 0) + 1;
       result.matchedRowCount++;
       if (dayStr) result.dayStrs[dayStr] = true;
     }
@@ -3632,7 +3687,8 @@
     var merged = {
       sums: {}, unmappedCount: 0, unmappedAmount: 0,
       skippedBadAmount: 0, skippedBadDate: 0, matchedRowCount: 0,
-      dayStrs: {}, fileCount: fileList.length,
+      rowCounts: {}, dayStrs: {}, fileCount: fileList.length,
+      skippedRows: [], // [{file, row, code, reason}]（代號直入模式）
       fileResults: [], // [{name, dayStrs, missingColumns}]——供呼叫端做重複偵測／缺欄錯誤卡片用
       filesWithErrors: [] // [{name, missingColumns}]，missingColumns 非空的檔案
     };
@@ -3645,9 +3701,13 @@
       }
       Object.keys(one.sums).forEach(function (accId) {
         merged.sums[accId] = (merged.sums[accId] || 0) + one.sums[accId];
+        merged.rowCounts[accId] = (merged.rowCounts[accId] || 0) + (one.rowCounts[accId] || 0);
       });
       merged.unmappedCount += one.unmappedCount;
       merged.unmappedAmount += one.unmappedAmount;
+      one.skippedRows.forEach(function (sr) {
+        merged.skippedRows.push({ file: f.name, row: sr.row, code: sr.code, reason: sr.reason });
+      });
       merged.skippedBadAmount += one.skippedBadAmount;
       merged.skippedBadDate += one.skippedBadDate;
       merged.matchedRowCount += one.matchedRowCount;
@@ -3716,8 +3776,21 @@
   // 原本漏了，寫進明細的匯入批次完全看不出這筆是哪次匯入、涵蓋哪些天，
   // 之後要追查資料來源或重匯時沒有線索。----------------------------------
 
+  // 去掉浮點加總雜訊（0.1+0.2＝0.30000000000000004），只取到小數 6 位，
+  // 不影響一般金額（C4：engine 不四捨五入，這裡只是把加法誤差抹掉）。
+  function cleanSum(x) { return Math.round(x * 1e6) / 1e6; }
+
   function buildEntries(agg, template) {
     var note = buildNote(agg);
+    if (isAccIdDirect(template)) {
+      // 代號直入：只寫檔案裡真的出現過的代號（含金額 0 的列，0 也要寫成
+      // 明細，科目才會離開 pending）；沒有「mapping 每個 acc_id 都補 0」
+      // 這條（mapping 只有保留鍵）。無效代號由 validateDirectCodes 在預覽
+      // 擋下送出，這裡不過濾，免得「默默略過」。
+      return Object.keys(agg.sums).sort().map(function (accId) {
+        return { acc_id: accId, amount: cleanSum(agg.sums[accId]), note: note };
+      });
+    }
     var accIds = {};
     Object.keys(template.mapping || {}).forEach(function (k) { accIds[template.mapping[k]] = true; });
     return Object.keys(accIds).sort().map(function (accId) {
@@ -3771,7 +3844,65 @@
     return /<table|<html/i.test(head);
   }
 
+  // ---- 代號直入模式：檢查每個代號是否能匯入（跟 apiImportEntries_ 同一組
+  // 規則：存在、啟用、取值方式屬於 匯入/手動/連接器）；分組欄空白的列也
+  // 列進來。回傳非空＝預覽列成「無法對應」並擋下送出。--------------------
+  function validateDirectCodes(agg, accounts) {
+    var byId = {};
+    (accounts || []).forEach(function (a) { byId[a.acc_id] = a; });
+    var invalid = [];
+    Object.keys(agg.sums || {}).sort().forEach(function (code) {
+      var a = byId[code];
+      var reason = null;
+      if (!a) reason = '科目代號不存在';
+      else if (a.active !== true) reason = '科目未啟用';
+      else if (!IMPORT_ALLOWED_MODES_[a.mode]) reason = '取值方式是「' + a.mode + '」，只能匯入到 匯入／手動／連接器 科目';
+      if (reason) {
+        invalid.push({ code: code, name: a ? a.name : '', reason: reason, rows: (agg.rowCounts || {})[code] || 0, amount: agg.sums[code] });
+      }
+    });
+    return invalid; // 代號空白的列在 agg.skippedRows（中 3）
+  }
+
+  // 嚴重 1：本店本月、同科目「非本範本來源」的有效明細（existingEntries＝
+  // getMonth 回的 entries），依科目彙總。預覽列成黃卡＋「連帶作廢」勾選框。
+  function findOtherSources(existingEntries, entries, tplId) {
+    var want = {};
+    (entries || []).forEach(function (en) { want[en.acc_id] = true; });
+    var sourceTag = '匯入:' + tplId;
+    var byAcc = {};
+    var order = [];
+    (existingEntries || []).forEach(function (e) {
+      if (!e || e.void === true || !want[e.acc_id] || e.source === sourceTag) return;
+      if (!byAcc[e.acc_id]) { byAcc[e.acc_id] = { acc_id: e.acc_id, amount: 0, count: 0, sources: [] }; order.push(e.acc_id); }
+      var b = byAcc[e.acc_id];
+      var amt = typeof e.amount === 'number' && isFinite(e.amount) ? e.amount : Number(e.amount);
+      if (isFinite(amt)) b.amount += amt;
+      b.count++;
+      if (b.sources.indexOf(e.source) === -1) b.sources.push(e.source);
+    });
+    return order.sort().map(function (k) { byAcc[k].amount = cleanSum(byAcc[k].amount); return byAcc[k]; });
+  }
+
+  // 金額顯示：整數照舊不帶小數；有小數時固定兩位（C4 第 9 條：顯示層取小數 2 位）。
+  function formatAmount(n) {
+    if (typeof n !== 'number' || !isFinite(n)) return '—';
+    var neg = n < 0;
+    var abs = Math.round(Math.abs(n) * 100) / 100;
+    var isInt = abs === Math.floor(abs);
+    var parts = (isInt ? String(abs) : abs.toFixed(2)).split('.');
+    var intStr = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    var out = intStr + (parts[1] ? '.' + parts[1] : '');
+    return (neg && abs !== 0 ? '−' : '') + out;
+  }
+
   root.ImportLogic = {
+    ACC_ID_DIRECT_KEY: ACC_ID_DIRECT_KEY,
+    isAccIdDirect: isAccIdDirect,
+    validateDirectCodes: validateDirectCodes,
+    findOtherSources: findOtherSources,
+    normalizeAccIdCell: normalizeAccIdCell,
+    formatAmount: formatAmount,
     looksLikeTextContent: looksLikeTextContent,
     excelSerialToDate: excelSerialToDate,
     cellToDayStr: cellToDayStr,
@@ -8015,7 +8146,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         tplSummary.innerHTML = '';
         var mapKeys = Object.keys(tpl.mapping || {});
         var line1 = el('div', null, '金額欄：' + (tpl.amount_col || '—') + '　日期欄：' + (tpl.date_col || '（不檢查月份)') + '　分組欄：' + (tpl.group_col || '（全部歸同一科目)'));
-        var line2 = el('div', null, '對應規則：' + mapKeys.length + ' 條（完全相符優先 → 前綴 * → 萬用字元 *）');
+        var line2 = window.ImportLogic.isAccIdDirect(tpl)
+          ? el('div', null, '對應規則：分組欄的值直接當科目代號（去前後空白、轉大寫；不存在／未啟用／不能匯入的代號會擋下）')
+          : el('div', null, '對應規則：' + mapKeys.length + ' 條（完全相符優先 → 前綴 * → 萬用字元 *）');
         tplSummary.appendChild(line1);
         tplSummary.appendChild(line2);
       }
@@ -8063,6 +8196,18 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         body.appendChild(field('金額欄', amountColInput));
         body.appendChild(field('分組欄（留空＝全部歸同一科目）', groupColInput));
 
+        // import-accid：勾選＝分組欄每列的值直接當科目代號，不用逐列設對應
+        // （mapping 存保留值 { "@ACC_ID": "@ACC_ID" }，見 gas/importLogic.html）。
+        var DIRECT_KEY = window.ImportLogic.ACC_ID_DIRECT_KEY;
+        var directWrap = el('label', 'import-field dup-file-row');
+        var directCheckbox = document.createElement('input');
+        directCheckbox.type = 'checkbox';
+        directCheckbox.id = 'tplAccIdDirect';
+        directCheckbox.checked = window.ImportLogic.isAccIdDirect(tpl);
+        directWrap.appendChild(directCheckbox);
+        directWrap.appendChild(document.createTextNode(' 分組欄的值就是科目代號（例如 A012；不用逐列設對應）'));
+        body.appendChild(directWrap);
+
         var mappingWrap = el('div', 'mapping-editor');
         mappingWrap.appendChild(el('div', 'import-field-label', '對應規則（分組值 → 科目；結尾打 * 表示前綴比對，單一個 * 是兜底）'));
         var rowsWrap = el('div', 'mapping-rows');
@@ -8089,7 +8234,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           row.appendChild(removeBtn);
           rowsWrap.appendChild(row);
         }
-        var mapping = tpl.mapping || {};
+        var mapping = directCheckbox.checked ? {} : (tpl.mapping || {});
         Object.keys(mapping).forEach(function (k) { addMappingRow(k, mapping[k]); });
         if (Object.keys(mapping).length === 0) addMappingRow('*', accounts[0] ? accounts[0].acc_id : '');
 
@@ -8098,10 +8243,15 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         addRowBtn.addEventListener('click', function () { addMappingRow('', accounts[0] ? accounts[0].acc_id : ''); });
         mappingWrap.appendChild(addRowBtn);
         body.appendChild(mappingWrap);
+        mappingWrap.classList.toggle('hidden', directCheckbox.checked);
+        directCheckbox.addEventListener('change', function () {
+          mappingWrap.classList.toggle('hidden', directCheckbox.checked);
+        });
 
         function readFormAsTemplate(tplId) {
           var newMapping = {};
-          Array.prototype.forEach.call(rowsWrap.querySelectorAll('.import-mapping-row'), function (row) {
+          if (directCheckbox.checked) newMapping[DIRECT_KEY] = DIRECT_KEY;
+          else Array.prototype.forEach.call(rowsWrap.querySelectorAll('.import-mapping-row'), function (row) {
             var inputs = row.querySelectorAll('input');
             var select = row.querySelector('select');
             var key = inputs[0].value.trim();
@@ -8151,6 +8301,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         var newTpl = readFormAsTemplate(nextTplId());
         if (!newTpl.name) { showToast('請填範本名稱'); return; }
         if (Object.keys(newTpl.mapping).length === 0) { showToast('至少要有一條對應規則'); return; }
+        if (window.ImportLogic.isAccIdDirect(newTpl) && !newTpl.group_col) { showToast('「分組欄的值就是科目代號」要填分組欄（放科目代號的那一欄）'); return; }
         var rows = templates.map(function (t) {
           return { tpl_id: t.tpl_id, name: t.name, file_type: t.file_type, header_row: t.header_row, date_col: t.date_col, amount_col: t.amount_col, group_col: t.group_col, mapping: t.mapping };
         }).concat([newTpl]);
@@ -8173,6 +8324,11 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       // （rows2D 已經在 lastFileList 裡）。
       var lastFileList = []; // [{name, rows2D}]，最近一次成功讀出的檔案
       var includedOverride = {};
+      // Fable 審查 PR #54 嚴重 1：代號直入模式要知道本店本月既有明細（getMonth
+      // 的 entries，登入者本來就讀得到，不新增任何後端入口），才能列出「已有
+      // 其他來源」並讓使用者勾選連帶作廢。null＝讀不到（擋送出）。
+      var lastExistingEntries = null;
+      var voidOtherOverride = {}; // acc_id -> 是否連帶作廢（預設勾）
 
       function runPreview() {
         var seq = ++previewSeq; // Fable 審查建議 #9：切檔/切範本/切月太快時丟棄過期結果
@@ -8185,17 +8341,25 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
 
         var month = monthSelect.value;
         var failedFiles = [];
-        Promise.all(files.map(function (f) {
+        var existingPromise = window.ImportLogic.isAccIdDirect(currentTpl)
+          ? call('getMonth', { store_id: storeSelect.value, month: month }).then(function (d) {
+            return (d && Array.isArray(d.entries)) ? d.entries : null;
+          }).catch(function () { return null; })
+          : Promise.resolve([]);
+        Promise.all([existingPromise].concat(files.map(function (f) {
           return readWorkbook(f, currentTpl).then(function (wb) {
             return { name: f.name, rows2D: sheetToRows2D(wb) };
           }).catch(function () {
             failedFiles.push(f.name);
             return { name: f.name, rows2D: [] };
           });
-        })).then(function (fileList) {
+        }))).then(function (results) {
           if (seq !== previewSeq) return; // 使用者在讀檔期間又改了選檔/範本/月份，這批結果已經過期
+          var fileList = results.slice(1);
+          lastExistingEntries = results[0];
           lastFileList = fileList;
           includedOverride = {}; // 每次重新選檔／換範本都重算一次預設的重複排除
+          voidOtherOverride = {};
           renderPreview(fileList, month, failedFiles);
         });
       }
@@ -8275,41 +8439,112 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           previewEl.appendChild(dupCard);
         }
 
-        var entries = window.ImportLogic.buildEntries(agg, currentTpl);
+        // import-accid：代號直入模式——不存在／未啟用／取值方式不能匯入的
+        // 代號、以及分組欄空白的列，列成「無法對應」並擋下送出（不默默略過）。
+        var direct = window.ImportLogic.isAccIdDirect(currentTpl);
+        var invalidCodes = direct ? window.ImportLogic.validateDirectCodes(agg, App.accounts || []) : [];
+        // 中 3：代號模式下被略過的列（金額錯、日期錯、代號空白）也列進來、一樣擋送出。
+        var skippedRows = direct ? (agg.skippedRows || []) : [];
+        var invalidSet = {};
+        invalidCodes.forEach(function (v) { invalidSet[v.code] = true; });
+        if (invalidCodes.length > 0 || skippedRows.length > 0) {
+          var badCard = el('div', 'errors-card');
+          badCard.id = 'impInvalidCodes';
+          badCard.appendChild(el('strong', null, '無法對應（' + invalidCodes.length + ' 個代號、' + skippedRows.length + ' 列被略過；修正檔案或科目設定後再選一次檔，沒修好不能匯入）：'));
+          invalidCodes.forEach(function (v) {
+            badCard.appendChild(el('div', null, v.code + (v.name ? ' ' + v.name : '') + '：' + v.reason + '　' + v.rows + ' 列　NT$ ' + window.ImportLogic.formatAmount(v.amount)));
+          });
+          var SKIP_SHOW_MAX = 50;
+          skippedRows.slice(0, SKIP_SHOW_MAX).forEach(function (sr) {
+            badCard.appendChild(el('div', null, sr.file + ' 第 ' + sr.row + ' 列（代號 ' + (sr.code || '空白') + '）：' + sr.reason));
+          });
+          if (skippedRows.length > SKIP_SHOW_MAX) {
+            badCard.appendChild(el('div', null, '……另有 ' + (skippedRows.length - SKIP_SHOW_MAX) + ' 列未列出'));
+          }
+          previewEl.appendChild(badCard);
+        }
+
+        var entries = window.ImportLogic.buildEntries(agg, currentTpl).filter(function (en) { return !invalidSet[en.acc_id]; });
+        var fmtAmt = direct ? window.ImportLogic.formatAmount : fmtInt;
+
+        // 嚴重 1：同科目本月已有「非本範本來源」的有效明細 → 黃卡＋每科目一個
+        // 「連帶作廢」勾選框（預設勾）。不勾＝保留並照寫（兩筆都會算，使用者自負）。
+        var existingUnknown = direct && lastExistingEntries === null;
+        var otherSources = (direct && !existingUnknown)
+          ? window.ImportLogic.findOtherSources(lastExistingEntries, entries, currentTpl.tpl_id) : [];
+        if (existingUnknown) {
+          previewEl.appendChild(el('div', 'errors-card', '讀不到本店本月既有明細，沒辦法檢查會不會跟其他來源重複，「確認匯入」已停用；請稍後重新選檔再試。'));
+        }
+        if (otherSources.length > 0) {
+          var otherCard = el('div', 'warning-banner');
+          otherCard.id = 'impOtherSources';
+          otherCard.appendChild(el('strong', null, '這些科目本月已有其他來源的明細，勾選＝匯入時連帶作廢（不勾會兩筆都算）：'));
+          otherSources.forEach(function (o) {
+            var row = el('label', 'dup-file-row');
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.className = 'void-other-cb';
+            cb.setAttribute('data-acc', o.acc_id);
+            cb.checked = Object.prototype.hasOwnProperty.call(voidOtherOverride, o.acc_id) ? voidOtherOverride[o.acc_id] : true;
+            voidOtherOverride[o.acc_id] = cb.checked;
+            cb.addEventListener('change', function () { voidOtherOverride[o.acc_id] = cb.checked; });
+            row.appendChild(cb);
+            row.appendChild(document.createTextNode(' 連帶作廢　' + o.acc_id + ' ' + accountName(o.acc_id) + '：已有其他來源 ' +
+              window.ImportLogic.formatAmount(o.amount) + ' 元（' + o.sources.join('、') + '，' + o.count + ' 筆）'));
+            otherCard.appendChild(row);
+          });
+          previewEl.appendChild(otherCard);
+        }
+        var accModeById = {};
+        (App.accounts || []).forEach(function (a) { accModeById[a.acc_id] = a.mode; });
         var table = el('div', 'preview-table');
         entries.forEach(function (en) {
           var row = el('div', 'preview-row');
-          row.appendChild(el('span', null, en.acc_id + ' ' + accountName(en.acc_id)));
-          row.appendChild(el('span', 'amount', 'NT$ ' + fmtInt(en.amount)));
+          var label = en.acc_id + ' ' + accountName(en.acc_id);
+          if (direct) label += '（' + (agg.rowCounts[en.acc_id] || 0) + ' 列）';
+          var labelSpan = el('span', null, label);
+          // 中 4：連接器科目提示
+          if (direct && accModeById[en.acc_id] === '連接器') {
+            labelSpan.appendChild(el('div', 'field-hint', '匯入後此科目本月不再由連接器自動帶入'));
+          }
+          row.appendChild(labelSpan);
+          row.appendChild(el('span', 'amount', 'NT$ ' + fmtAmt(en.amount)));
           table.appendChild(row);
         });
         var totalRow = el('div', 'preview-row preview-total');
-        totalRow.appendChild(el('span', null, '合計'));
-        totalRow.appendChild(el('span', 'amount', 'NT$ ' + fmtInt(entries.reduce(function (s, e) { return s + e.amount; }, 0))));
+        totalRow.appendChild(el('span', null, direct ? '合計（' + entries.length + ' 個科目）' : '合計'));
+        totalRow.appendChild(el('span', 'amount', 'NT$ ' + fmtAmt(entries.reduce(function (s, e) { return s + e.amount; }, 0))));
         table.appendChild(totalRow);
         previewEl.appendChild(table);
 
-        var statLine = el('div', 'preview-stats',
-          '未對應 ' + agg.unmappedCount + ' 列（金額 NT$ ' + fmtInt(agg.unmappedAmount) + '）　' +
-          '略過（金額格式錯）' + agg.skippedBadAmount + ' 列　略過（日期不在月份）' + agg.skippedBadDate + ' 列');
-        previewEl.appendChild(statLine);
-
-        var range = window.ImportLogic.dateRangeOf(agg.dayStrs);
-        var totalDays = window.ImportLogic.daysInMonth(month);
-        var coveredDays = range ? range.count : 0;
-        var incomplete = coveredDays < totalDays;
-        var hasSkipped = (agg.skippedBadAmount + agg.skippedBadDate) > 0;
-        var coverageLine = el('div', incomplete ? 'warning-banner' : 'preview-stats');
-        if (range) {
-          coverageLine.appendChild(el('div', null,
-            '涵蓋日期：' + range.from + ' ~ ' + range.to + '（' + coveredDays + '/' + totalDays + ' 天）'));
+        var incomplete = false;
+        var hasSkipped = false;
+        if (direct) {
+          // 輕 8：代號模式不看日覆蓋率（不是逐日資料），也不跳不足整月確認。
+          previewEl.appendChild(el('div', 'preview-stats', agg.matchedRowCount + ' 列／' + entries.length + ' 個科目'));
         } else {
-          coverageLine.appendChild(el('div', null, '沒有任何列落在 ' + month + '（0/' + totalDays + ' 天）'));
+          var statLine = el('div', 'preview-stats',
+            '未對應 ' + agg.unmappedCount + ' 列（金額 NT$ ' + fmtInt(agg.unmappedAmount) + '）　' +
+            '略過（金額格式錯）' + agg.skippedBadAmount + ' 列　略過（日期不在月份）' + agg.skippedBadDate + ' 列');
+          previewEl.appendChild(statLine);
+
+          var range = window.ImportLogic.dateRangeOf(agg.dayStrs);
+          var totalDays = window.ImportLogic.daysInMonth(month);
+          var coveredDays = range ? range.count : 0;
+          incomplete = coveredDays < totalDays;
+          hasSkipped = (agg.skippedBadAmount + agg.skippedBadDate) > 0;
+          var coverageLine = el('div', incomplete ? 'warning-banner' : 'preview-stats');
+          if (range) {
+            coverageLine.appendChild(el('div', null,
+              '涵蓋日期：' + range.from + ' ~ ' + range.to + '（' + coveredDays + '/' + totalDays + ' 天）'));
+          } else {
+            coverageLine.appendChild(el('div', null, '沒有任何列落在 ' + month + '（0/' + totalDays + ' 天）'));
+          }
+          if (incomplete) {
+            coverageLine.appendChild(el('div', null, '一次匯入＝整月取代，缺的天數會變成 0，請確認是否選齊整月的檔案。'));
+          }
+          previewEl.appendChild(coverageLine);
         }
-        if (incomplete) {
-          coverageLine.appendChild(el('div', null, '一次匯入＝整月取代，缺的天數會變成 0，請確認是否選齊整月的檔案。'));
-        }
-        previewEl.appendChild(coverageLine);
 
         if (!currentTplSaved) {
           previewEl.appendChild(el('div', 'warning-banner', '目前套用的範本設定還沒存成範本，請先按「存成新範本」才能匯入。'));
@@ -8322,8 +8557,12 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         // Fable 審查必修 #3：完全沒有任何列對到任何科目（matchedRowCount===0）
         // 時禁用確認鈕——這種情況匯入等於「把整個月這個範本的資料全部清成
         // 0」，不該讓人手滑點下去；Fable 審查建議 #10：範本還沒存也不准匯入。
-        var canConfirm = agg.matchedRowCount > 0 && currentTplSaved;
+        var canConfirm = agg.matchedRowCount > 0 && currentTplSaved && invalidCodes.length === 0 &&
+          skippedRows.length === 0 && !existingUnknown;
         confirmBtn.disabled = !canConfirm;
+        if (invalidCodes.length > 0 || skippedRows.length > 0) {
+          previewEl.appendChild(el('div', 'preview-stats', '有無法對應的科目代號或被略過的列，「確認匯入」已停用。'));
+        }
         if (agg.matchedRowCount === 0) {
           previewEl.appendChild(el('div', 'preview-stats', '沒有任何列對到任何科目，「確認匯入」已停用。'));
         }
@@ -8342,6 +8581,13 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           if (!window.confirm(msg)) return;
         }
 
+        // import-accid：送出前再檢查一次代號（避免按鈕狀態被繞過時送出無效代號）。
+        var directMode = window.ImportLogic.isAccIdDirect(currentTpl);
+        if (directMode && (window.ImportLogic.validateDirectCodes(agg, App.accounts || []).length > 0 ||
+            (agg.skippedRows || []).length > 0 || lastExistingEntries === null)) {
+          showToast('有無法對應的科目代號或被略過的列，不能匯入');
+          return;
+        }
         var entries = window.ImportLogic.buildEntries(agg, currentTpl);
         var range = window.ImportLogic.dateRangeOf(agg.dayStrs);
         // 第二輪審查必修 #2：meta.files 用「排除重複後」實際拿去彙總的檔數
@@ -8358,10 +8604,18 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         // 送出兩個 importEntries（後端有 withLock_ 擋併發，但前端沒擋就會讓
         // 使用者看到第二次呼叫回 BUSY，體驗上像是壞了）。
         confirmBtn.disabled = true;
-        call('importEntries', {
-          store_id: storeSelect.value, month: month, tpl_id: currentTpl.tpl_id, entries: entries, meta: meta
-        }).then(function (data) {
-          showToast('匯入完成：新增 ' + data.added + ' 筆，作廢舊資料 ' + data.voided + ' 筆');
+        var req = { store_id: storeSelect.value, month: month, tpl_id: currentTpl.tpl_id, entries: entries, meta: meta };
+        if (directMode) {
+          // 嚴重 1：只送本次 entries 裡、使用者勾了「連帶作廢」的科目。
+          var entryIds = {};
+          entries.forEach(function (en) { entryIds[en.acc_id] = true; });
+          req.void_other_sources = Object.keys(voidOtherOverride).filter(function (a) { return voidOtherOverride[a] === true && entryIds[a]; }).sort();
+        }
+        call('importEntries', req).then(function (data) {
+          showToast('匯入完成：新增 ' + data.added + ' 筆，作廢舊資料 ' + data.voided + ' 筆' +
+            (data.voided_other ? '，連帶作廢其他來源 ' + data.voided_other + ' 筆' : ''));
+          // 代號模式：本月既有明細已經變了，重算預覽（其他來源黃卡要跟著更新）。
+          if (directMode) runPreview();
           confirmBtn.disabled = false; // 成功後也重新啟用——使用者可能想馬上再匯一次驗證冪等
         }).catch(function (err) {
           handleApiError(err);
@@ -8417,6 +8671,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         if (fileInput.files && fileInput.files.length > 0) runPreview();
       });
       monthSelect.addEventListener('change', function () {
+        if (fileInput.files && fileInput.files.length > 0) runPreview();
+      });
+      // 代號模式的「其他來源」檢查跟門市有關，換門市也要重算預覽。
+      storeSelect.addEventListener('change', function () {
         if (fileInput.files && fileInput.files.length > 0) runPreview();
       });
       fileInput.addEventListener('change', runPreview);
@@ -9684,6 +9942,12 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         var list = el('div', null, '');
         panel.appendChild(list);
         var errEl = errorEl('');
+        // import-accid：「分組欄的值就是科目代號」＝mapping 恰好是保留值
+        // { "@ACC_ID": "@ACC_ID" }（跟 gas/importLogic.html ACC_ID_DIRECT_KEY、
+        // gas/apiWrite.js ACC_ID_DIRECT_MAPPING_KEY_ 同一個字串）。
+        function isDirect(r) {
+          return !!(r.mapping && Object.prototype.hasOwnProperty.call(r.mapping, '@ACC_ID'));
+        }
 
         function renderRows() {
           list.innerHTML = '';
@@ -9738,12 +10002,28 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
             groupColInput.addEventListener('input', function () { r.group_col = groupColInput.value; });
             card.appendChild(fieldRow('分組欄（留白＝全部歸 *）', groupColInput));
 
+            var directLabel = el('label', 'dup-file-row');
+            var directCheckbox = document.createElement('input');
+            directCheckbox.type = 'checkbox';
+            directCheckbox.checked = isDirect(r);
+            directLabel.appendChild(directCheckbox);
+            directLabel.appendChild(document.createTextNode(' 分組欄的值就是科目代號（例如 A012；不用逐列設對應）'));
+            card.appendChild(directLabel);
+            directCheckbox.addEventListener('change', function () {
+              r.mapping = directCheckbox.checked ? { '@ACC_ID': '@ACC_ID' } : {};
+              renderMapping();
+            });
+
             card.appendChild(el('label', null, '對應（分組欄值 → 科目）'));
             var mappingBox = el('div', null, '');
             card.appendChild(mappingBox);
 
             function renderMapping() {
               mappingBox.innerHTML = '';
+              if (isDirect(r)) {
+                mappingBox.appendChild(el('div', 'field-hint', '分組欄每列的值（去前後空白、轉大寫）直接當科目代號；不存在／未啟用／不能匯入的代號，匯入預覽會列出並擋下。'));
+                return;
+              }
               Object.keys(r.mapping).forEach(function (key) {
                 var mrow = el('div', 'mapping-row');
                 var keyInput = document.createElement('input');
@@ -9825,6 +10105,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
             if (!/^T\d{2}$/.test(r.tpl_id)) { errEl.textContent = 'tpl_id 格式須為 Txx'; return; }
             if (!r.name) { errEl.textContent = r.tpl_id + '：名稱必填'; return; }
             if (typeof r.header_row !== 'number' || r.header_row < 1) { errEl.textContent = r.tpl_id + '：表頭列須為 ≥1 整數'; return; }
+            if (isDirect(r) && !(r.group_col || '').trim()) { errEl.textContent = r.tpl_id + '：「分組欄的值就是科目代號」要填分組欄'; return; }
+            // Fable 審查 PR #54 輕 6：跟匯入頁「存成新範本」一致，至少一條對應。
+            if (Object.keys(r.mapping || {}).length === 0) { errEl.textContent = r.tpl_id + '：至少要有一條對應規則（或勾「分組欄的值就是科目代號」）'; return; }
             var mapKeys = Object.keys(r.mapping);
             for (var j = 0; j < mapKeys.length; j++) {
               // 必修 #9：對應鍵不可為空字串（表單改鍵改到一半沒填完）。
