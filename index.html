@@ -836,6 +836,9 @@
 
   /* 使用者名稱即時格式檢查（gas/settings.html）：不合規／重名時輸入框邊框
      跟著變色，不是只靠下方那行小字——對比 ≥4.5:1（--down 已在檔頭調深）。 */
+  /* Fable 審查 PR #50 嚴重1(a)：連接器金鑰欄是 type=text（避開密碼管理器），
+     用 text-security 遮罩顯示。 */
+  .secret-mask { -webkit-text-security: disc; text-security: disc; }
   input.input-error {
     border-color: var(--down) !important;
   }
@@ -859,6 +862,7 @@
   .data-table th { color: var(--ink-soft); font-weight: 700; font-size: 14px; } /* item 7：表頭 14px 粗體 */
 
   .data-table input[type="text"],
+  .data-table input[type="url"],
   .data-table input[type="number"],
   .data-table input[type="month"],
   .data-table input[type="password"] {
@@ -7933,7 +7937,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
    * PnlEngine（科目公式存檔前用 PnlEngine.validateAccounts 驗語法／循環）。
    *
    * 分頁：門市、科目、門市固定值、匯入範本、使用者、連接器、系統設定，
-   * 外加一個「建立上月草稿」面板（呼叫 createDraft）。
+   * 外加一個「建立草稿（可選月份，上限當月）」面板（呼叫 createDraft）。
    *
    * 存檔流程：每個分頁各自維護一份「草稿」陣列（讀進來的資料深拷貝），
    * 使用者在表格輸入格直接編輯；按「存檔」先做前端驗證（擋掉明顯錯誤，
@@ -8264,7 +8268,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         topCollapsible.open = desktopMql ? desktopMql.matches : (window.innerWidth >= 768);
         currentTopCollapsible = topCollapsible; // 更新「目前畫面上這個節點」的活動指標
         var topSummary = document.createElement('summary');
-        topSummary.textContent = '建立上月草稿／立即拉取本月連接器';
+        topSummary.textContent = '建立草稿（可選月份）／立即拉取本月連接器';
         topCollapsible.appendChild(topSummary);
         topCollapsible.appendChild(buildCreateDraftPanel());
         // T15（#16）落地清單第 7 項：跟「建立上月草稿」並排，管理者專用
@@ -8386,10 +8390,32 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         });
       }
 
-      // ---- 建立上月草稿 ----------------------------------------------------
+      // Fable 審查 PR #50 中3：建立草稿／立即拉取共用——把 createDraft_／
+      // refreshConnectors 回的 connectorFailures（已遮蔽）、warnings、timedOut
+      // 組成一段純文字，呼叫端一律用 textContent 放進畫面。
+      function formatConnectorIssues_(res) {
+        if (!res) return '';
+        var parts = [];
+        var fails = res.connectorFailures || [];
+        if (fails.length) {
+          parts.push('待處理（' + fails.length + '）：' + fails.map(function (f) {
+            return f.connector + ':' + f.code + (f.acc_id ? '(' + f.acc_id + ')' : '') + (f.message ? '（' + f.message + '）' : '');
+          }).join('、'));
+        }
+        var warns = res.warnings || [];
+        if (warns.length) {
+          parts.push('提醒（' + warns.length + '）：' + warns.map(function (w) {
+            return w.code + (w.acc_id ? '(' + w.acc_id + ')' : '');
+          }).join('、'));
+        }
+        if (res.timedOut) parts.push('執行逾時，部分連接器未跑完，明天 06:30 每日更新會接續，或稍後再按一次');
+        return parts.join('；');
+      }
+
+      // ---- 建立草稿（可選月份） ----------------------------------------------
       function buildCreateDraftPanel() {
         var panel = el('div', 'settings-panel');
-        panel.appendChild(el('div', 'settings-section-title', '建立上月草稿'));
+        panel.appendChild(el('div', 'settings-section-title', '建立草稿（可選月份）'));
 
         var activeStores = (state.data.stores || []).filter(function (s) { return s.active; });
         var noStores = activeStores.length === 0;
@@ -8409,9 +8435,11 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         var monthInput = document.createElement('input');
         monthInput.type = 'month';
         monthInput.value = shiftMonthStr(taipeiMonthNow(), -1);
-        // Fable 對抗審查必修 #10：月份上限＝上個月（後端也會擋，這裡先在
-        // UI 層面擋掉，不用等送出才被回絕）。
-        monthInput.max = shiftMonthStr(taipeiMonthNow(), -1);
+        // 月份上限＝當月（台北時區；後端 apiCreateDraft_ 同一條規則）。
+        // 2026-09-28 起從「上個月」放寬：dailyRefresh_ 每天 06:30 本來就會建
+        // 當月草稿，每月 1 號 06:30 前或觸發器沒跑時要能手動補建。預設值
+        // 維持上個月（月結最常用）。
+        monthInput.max = taipeiMonthNow();
 
         var row = el('div', 'actions-bar');
         var storeField = fieldRow('門市', storeSelect);
@@ -8443,10 +8471,17 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           msgEl.textContent = '';
           call('createDraft', { store_id: storeSelect.value, month: monthInput.value }).then(function (res) {
             createBtn.disabled = false;
-            if (res.created) {
-              showToast(res.store_id + ' ' + res.month + ' 草稿已建立');
-            } else {
+            msgEl.textContent = formatConnectorIssues_(res);
+            // 真後端（gas/apiWrite.js apiCreateDraft_ → createDraft_）回
+            // {skipped, status, entriesAdded…}，沒有 created 欄位——舊寫法只看
+            // res.created，真後端建成功也一律顯示「月份已存在」。skipped＝已定稿
+            // 未重建；created===false 只有 test/ui/mock-gas.js 會回（月份列已存在）。
+            if (res.skipped) {
+              showToast(res.store_id + ' ' + res.month + ' 已定稿（狀態：' + res.status + '），未重建');
+            } else if (res.created === false) {
               showToast(res.store_id + ' ' + res.month + ' 月份已存在（狀態：' + res.status + '），未重複建立');
+            } else {
+              showToast(res.store_id + ' ' + res.month + ' 草稿已建立' + (typeof res.entriesAdded === 'number' ? '（帶入 ' + res.entriesAdded + ' 筆）' : ''));
             }
           }).catch(function (err) {
             createBtn.disabled = false;
@@ -8526,9 +8561,11 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
               lines.push('成功：' + res.succeededConnectors.join('、'));
             }
             if (res.connectorFailures && res.connectorFailures.length) {
-              lines.push('待處理（' + res.connectorFailures.length + '）：' + res.connectorFailures.map(function (f) {
-                return f.connector + ':' + f.code + (f.acc_id ? '(' + f.acc_id + ')' : '');
-              }).join('、'));
+              // connector-url-guard：除了 code 也顯示 message（後端已經過
+              // sanitizeConnectorErrorText_ 遮蔽金鑰與 URL query），例如「DNS
+              // 錯誤：http://Eason」一眼就看得出是 URL 被填壞；整段走
+              // resultEl.textContent，不當 HTML。
+              lines.push(formatConnectorIssues_({ connectorFailures: res.connectorFailures }));
             }
             resultEl.textContent = lines.join('；');
             showToast('已重新拉取連接器');
@@ -9590,13 +9627,30 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       // url/url_set，但 key 永遠只能是 '***'——伺服器本來就不會把明碼
       // 金鑰送回來，前端也不該假裝自己知道）。
       function pickConnectorForVersionBaseline_(r) {
-        return { name: r.name, type: r.type, url: r.url || '', url_set: !!r.url_set, key: '***', mapping: r.mapping, store_id: r.store_id, active: r.active };
+        return { name: r.name, type: r.type, url: r.url || '', url_set: !!r.url_set, url_valid: r.url_valid !== false, key: '***', mapping: r.mapping, store_id: r.store_id, active: r.active };
       }
 
       // 尚未實作同步邏輯的連接器類型（畫面標「尚未串接」）。cashbook／transfer／
       // payroll 三種已於 PR #34（T15）實作並上線，故清單為空；日後新增類型但
       // 還沒接上同步邏輯時，把該類型加進來即可。
       var CONNECTOR_TYPES_NOT_IMPLEMENTED_ = {};
+
+      // connector-url-guard（2026-09-28 事故）：瀏覽器／密碼管理器看到金鑰欄
+      // 是 password 類型，會把登入帳號（「Eason」）自動填進它前面那個文字欄
+      // ——也就是 URL 欄，蓋掉「留白＝保留原值」的哨兵，存檔後現金帳 URL
+      // 變成 "Eason"。連接器表格的欄位一律關 autofill（Chrome/Safari 看
+      // autocomplete，LastPass 看 data-lpignore，1Password 看 data-1p-ignore），
+      // 存檔前再用跟後端 gas/api.js 同一條 regex 擋非 https 網址。
+      var CONNECTOR_URL_RE_ = /^https:\/\/[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+(:\d{1,5})?([\/?#][^\s]*)?$/i;
+      function isValidConnectorUrl_(url) {
+        return typeof url === 'string' && CONNECTOR_URL_RE_.test(url);
+      }
+      function noAutofill_(input) {
+        input.setAttribute('data-lpignore', 'true');
+        input.setAttribute('data-1p-ignore', 'true');
+        input.setAttribute('data-form-type', 'other');
+        input.spellcheck = false;
+      }
 
       function renderConnectorsSection(panel) {
         panel.appendChild(el('div', 'settings-section-title', '連接器'));
@@ -9775,6 +9829,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
             var nameTd = document.createElement('td');
             var nameInput = document.createElement('input');
             nameInput.type = 'text';
+            nameInput.name = 'pnl-connector-name-' + idx;
+            nameInput.setAttribute('autocomplete', 'off');
+            noAutofill_(nameInput);
             nameInput.value = r.name || '';
             nameInput.addEventListener('input', function () { r.name = nameInput.value; });
             nameTd.appendChild(nameInput);
@@ -9801,12 +9858,20 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
             // 送回去（那樣會把原本完整的路徑/查詢字串弄丟，是這次對抗審查
             // 抓到的真實 bug）。
             var urlTd = document.createElement('td');
-            urlTd.appendChild(el('span', 'badge ' + (r.url_set ? 'on' : 'off'), r.url_set ? '已設定' : '未設定'));
+            // Fable 審查 PR #50 中4：後端 getSettings 回 url_valid＝false（例如已
+            // 被 autofill 蓋成 "Eason"）→ 紅字提示並把輸入框標紅。
+            var urlInvalid = r.url_set && r.url_valid === false;
+            urlTd.appendChild(el('span', 'badge ' + (r.url_set && !urlInvalid ? 'on' : 'off'), urlInvalid ? 'URL 無效，請重填' : (r.url_set ? '已設定' : '未設定')));
             if (r.url) urlTd.appendChild(el('div', null, '目前網域：' + r.url));
             var urlInput = document.createElement('input');
-            urlInput.type = 'text';
-            urlInput.placeholder = '留白＝不變更；填入完整新 URL';
+            urlInput.type = 'url';
+            urlInput.name = 'pnl-connector-endpoint-' + idx;
+            urlInput.setAttribute('autocomplete', 'off');
+            urlInput.setAttribute('inputmode', 'url');
+            noAutofill_(urlInput);
+            urlInput.placeholder = '留白＝不變更；填入完整新 URL（https://…）';
             urlInput.value = r.newUrl || '';
+            if (urlInvalid) urlInput.classList.add('input-error');
             urlInput.addEventListener('input', function () { r.newUrl = urlInput.value; });
             urlTd.appendChild(urlInput);
             tr.appendChild(urlTd);
@@ -9815,7 +9880,14 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
             keyTd.appendChild(el('span', 'badge on', '已設定'));
             keyTd.appendChild(document.createElement('br'));
             var keyInput = document.createElement('input');
-            keyInput.type = 'password';
+            // Fable 審查 PR #50 嚴重1(a)：DOM 上不能有 password 欄——有就會被
+            // 密碼管理器當登入表單、把帳號塞進前一個文字欄（URL）。改成
+            // type=text＋CSS -webkit-text-security: disc 遮罩顯示。
+            keyInput.type = 'text';
+            keyInput.classList.add('secret-mask');
+            keyInput.name = 'pnl-connector-secret-' + idx;
+            keyInput.setAttribute('autocomplete', 'off');
+            noAutofill_(keyInput);
             keyInput.placeholder = '留白＝不變更';
             keyInput.value = r.key || '';
             keyInput.addEventListener('input', function () { r.key = keyInput.value; });
@@ -9903,9 +9975,17 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           var originalNames = {};
           (state.data.connectors || []).forEach(function (c) { originalNames[c.name] = true; });
 
+          Array.prototype.forEach.call(tbody.querySelectorAll('.input-error'), function (n) { n.classList.remove('input-error'); });
           for (var i = 0; i < rows.length; i++) {
             var r = rows[i];
             if (!r.name) { errEl.textContent = '第 ' + (i + 1) + ' 列：名稱必填'; return; }
+            r.newUrl = (r.newUrl || '').trim();
+            if (r.newUrl && !isValidConnectorUrl_(r.newUrl)) {
+              var badUrlInput = tbody.querySelector('input[name="pnl-connector-endpoint-' + i + '"]');
+              if (badUrlInput) { badUrlInput.classList.add('input-error'); badUrlInput.focus(); }
+              errEl.textContent = r.name + '：URL 必須是 https:// 開頭的完整網址（目前填的是「' + r.newUrl + '」，可能是瀏覽器自動填入）；只想改金鑰的話，URL 欄請留白';
+              return;
+            }
             // Fable 對抗審查必修 #4：改名（含新增）視同新連接器，必須明碼
             // 填金鑰與 URL，不能留白／沿用畫面上的唯讀顯示。
             if (!originalNames[r.name]) {
@@ -9940,7 +10020,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
               // 只是前端自己沒把新網域接回顯示欄位）。有填 newUrl 就用它算
               // 出新網域接回去；沒填（留白＝不變更）就維持原本 r.url 不動。
               rows.forEach(function (r) {
-                if (r.newUrl) r.url = urlDomainOnly_(r.newUrl);
+                if (r.newUrl) { r.url = urlDomainOnly_(r.newUrl); r.url_valid = true; }
                 r.key = ''; r.newUrl = ''; r._origName = r.name; r.url_set = true;
               });
               state.data.connectors = rows.map(pickConnectorForVersionBaseline_);
