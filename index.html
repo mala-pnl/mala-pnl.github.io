@@ -136,6 +136,7 @@
   .login-card input[type="password"],
   .login-card input[type="text"] {
     width: 100%;
+    min-height: var(--tap-min); /* 觸控目標 ≥44px（Fable 審查慣例，見 --tap-min 的說明） */
     padding: 12px 14px;
     border-radius: 8px;
     border: 1px solid var(--line);
@@ -833,6 +834,12 @@
     font-size: 12px;
   }
 
+  /* 使用者名稱即時格式檢查（gas/settings.html）：不合規／重名時輸入框邊框
+     跟著變色，不是只靠下方那行小字——對比 ≥4.5:1（--down 已在檔頭調深）。 */
+  input.input-error {
+    border-color: var(--down) !important;
+  }
+
   .table-wrap { overflow-x: auto; margin-bottom: 10px; }
 
   .data-table {
@@ -1294,6 +1301,44 @@
     color: var(--ink-soft);
     font-weight: 400;
     margin-top: 2px;
+  }
+
+  /* 通行碼／使用者名稱即時檢查清單（gas/shell.html 強制換碼／自改通行碼、
+     gas/settings.html 使用者名稱），規則正本見 src/passcodeRules.js。
+     每一項最小高度對齊 --tap-min，手機上一樣好點／好讀；未符合＝
+     --ink-soft（跟其餘提示文字同一色，不是用紅色警告——這只是「還沒完成」
+     不是「錯誤」）、已符合＝--up（跟財務數字的正向色共用，對比 ≥4.5:1，
+     見檔頭 --up 那行的說明）。*/
+  .passcode-checklist {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .passcode-check-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 22px;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .passcode-check-item.ok {
+    color: var(--up);
+    font-weight: 600;
+  }
+
+  .passcode-check-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    flex-shrink: 0;
+    font-weight: 700;
   }
 
   /* 建議5：查看附件——PDF 是可點的連結，其餘（無法預覽）是純文字提示。 */
@@ -3082,6 +3127,138 @@
 
   <script>
 /**
+ * PnlPasscodeRules — 前端「帳號名稱／通行碼」規則的唯一正本。
+ * UMD：node (module.exports)、瀏覽器 (<script> 掛 window.PnlPasscodeRules)
+ * 兩處共用（跟 src/engine.js／src/csv.js 同一套骨架）。tools/build.sh 把這支
+ * 內嵌成 gas/passcodeRulesInclude.html 給 gas/shell.html／gas/settings.html
+ * include。
+ *
+ * ⚠ 這裡的每一條規則都必須跟後端**逐字對齊**，不能各自演化：
+ * - 通行碼長度／英數混合：gas/apiWrite.js NEW_PASSCODE_RE_
+ * - 常見弱碼小清單：gas/apiWrite.js WEAK_PASSCODES_
+ * - 帳號名稱正規化（trim＋NFKC）：gas/auth.js normalizeUserName_
+ * - 帳號名稱格式（不可空白／不可含 `|`／不可含控制字元／不可以
+ *   `= + - @` 開頭）：gas/auth.js assertValidUserName_
+ * 這支檔案**不改動任何後端行為**，只是把同一套規則字串在前端重寫一份
+ * 給即時檢查用；test/passcodeRulesParity.test.js 逐項比對兩邊在同一組
+ * 輸入下的判定結果必須一致，改動任何一邊都要順手同步另一邊。
+ */
+(function (root, factory) {
+  if (typeof module === 'object' && typeof module.exports === 'object') {
+    module.exports = factory();
+  } else {
+    root.PnlPasscodeRules = factory();
+  }
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  // 逐字對齊 gas/apiWrite.js WEAK_PASSCODES_（小寫比對）。
+  var WEAK_PASSCODES = {
+    'password12': 1, 'password123': 1, 'passw0rd123': 1, 'qwertyuiop1': 1,
+    'qwerty12345': 1, '1234567890': 1, '0123456789': 1, '1111111111': 1,
+    '0000000000': 1, 'abcdefghij': 1, 'letmein123': 1, 'iloveyou123': 1,
+    'admin123456': 1, 'welcome123': 1, '9999999999': 1
+  };
+
+  function isWeakPasscode(pass) {
+    var s = pass === null || pass === undefined ? '' : String(pass);
+    return Object.prototype.hasOwnProperty.call(WEAK_PASSCODES, s.toLowerCase());
+  }
+
+  // 逐字對齊 gas/apiWrite.js NEW_PASSCODE_RE_：至少 10 碼，且同時包含至少
+  // 一個英文字母與一個數字。
+  var NEW_PASSCODE_RE = /^(?=.*[A-Za-z])(?=.*[0-9]).{10,}$/;
+
+  // 逐字對齊 gas/auth.js normalizeUserName_：trim 頭尾空白＋Unicode NFKC。
+  function normalizeUserName(raw) {
+    if (typeof raw !== 'string') return '';
+    var s = raw.normalize ? raw.normalize('NFKC') : raw;
+    return s.trim();
+  }
+
+  var DANGEROUS_NAME_PREFIX_RE = /^[=+\-@]/;
+  // eslint-disable-next-line no-control-regex -- 跟 gas/auth.js 同一條，這裡就是刻意要比對控制字元。
+  var CONTROL_CHAR_RE = /[\x00-\x1F\x7F]/;
+
+  // 對齊 gas/auth.js assertValidUserName_，但回傳「合法→null／不合法→錯誤
+  // 訊息字串」而不是丟例外——前端要即時顯示，不是存檔才驗一次。訊息故意
+  // 不帶「使用者名稱 X：」前綴（那是後端批次存檔用來標示是哪一列，前端是
+  // 單一輸入框旁邊的即時提示，不需要再報一次名字）。
+  function userNameError(rawName) {
+    var name = normalizeUserName(rawName);
+    if (!name) return '使用者名稱不可為空白';
+    if (name.indexOf('|') !== -1) return '不可包含 |';
+    if (CONTROL_CHAR_RE.test(name)) return '不可包含控制字元';
+    if (DANGEROUS_NAME_PREFIX_RE.test(name)) return '不可以 = + - @ 開頭（避免被試算表/Excel 誤判成公式）';
+    return null;
+  }
+
+  // 名稱是否與既有名單重複——用正規化後的字串精準比對（跟後端
+  // saveUsersTable_ 的 nameCount 一致，是大小寫敏感的精準比對，不是
+  // toLowerCase 比較）。otherNames 是「排除自己那一列之後」的其餘名稱
+  // 原始字串陣列，這裡一併做正規化再比。
+  function isDuplicateName(rawName, otherNames) {
+    var name = normalizeUserName(rawName);
+    if (!name) return false;
+    return (otherNames || []).some(function (n) { return normalizeUserName(n) === name; });
+  }
+
+  // 通行碼即時檢查清單，回傳一組 {key, label, ok}，給畫面逐項打勾用。
+  // opts:
+  //   name        帳號名稱（比對「不等於帳號名稱」，不分大小寫，對齊
+  //               apiChangeMyPasscode_ 的 newPass.toLowerCase() === user.name.toLowerCase()）
+  //   oldPass     目前的通行碼——只有傳了這個 key（不論是不是空字串）才會
+  //               出現「不等於舊通行碼」這一項；forced（首次設定臨時碼）
+  //               畫面沒有「目前的通行碼」欄位，呼叫端就不要傳這個 key。
+  //   confirmPass 第二次輸入的新通行碼，用來檢查兩次輸入是否一致。
+  function checkPasscode(pass, opts) {
+    opts = opts || {};
+    var p = pass || '';
+    var name = opts.name || '';
+    var items = [];
+    items.push({ key: 'len', label: '至少 10 碼', ok: p.length >= 10 });
+    items.push({ key: 'alpha', label: '包含英文字母', ok: /[A-Za-z]/.test(p) });
+    items.push({ key: 'digit', label: '包含數字', ok: /[0-9]/.test(p) });
+    items.push({ key: 'notName', label: '不等於帳號名稱', ok: !p || !name || p.toLowerCase() !== name.toLowerCase() });
+    if (Object.prototype.hasOwnProperty.call(opts, 'oldPass')) {
+      var oldPass = opts.oldPass || '';
+      items.push({ key: 'notOld', label: '不等於舊通行碼', ok: !p || !oldPass || p !== oldPass });
+    }
+    if (Object.prototype.hasOwnProperty.call(opts, 'confirmPass')) {
+      var confirmPass = opts.confirmPass;
+      items.push({ key: 'match', label: '兩次輸入一致', ok: !!p && p === confirmPass });
+    }
+    items.push({ key: 'notWeak', label: '不是常見弱密碼', ok: !p || !isWeakPasscode(p) });
+    return items;
+  }
+
+  function passcodeAllOk(items) {
+    return items.every(function (it) { return it.ok; });
+  }
+
+  // 後端 NEW_PASSCODE_RE_／isWeakPasscode_ 之外，changeMyPasscode 還會擋
+  // 「等於帳號名稱」「等於舊碼」——checkPasscode() 已經涵蓋，這支只是給
+  // 只需要「整體是否合法」布林值（不需要逐項清單）的呼叫端一個方便入口。
+  function isValidNewPasscode(pass, opts) {
+    return passcodeAllOk(checkPasscode(pass, opts));
+  }
+
+  return {
+    WEAK_PASSCODES: WEAK_PASSCODES,
+    isWeakPasscode: isWeakPasscode,
+    NEW_PASSCODE_RE: NEW_PASSCODE_RE,
+    normalizeUserName: normalizeUserName,
+    userNameError: userNameError,
+    isDuplicateName: isDuplicateName,
+    checkPasscode: checkPasscode,
+    passcodeAllOk: passcodeAllOk,
+    isValidNewPasscode: isValidNewPasscode
+  };
+});
+</script>
+
+  <script>
+/**
  * T09（#10）匯入頁的純邏輯層——跟 SheetJS／DOM 完全脫鉤，只吃「已經是
  * 2D 陣列」的試算表資料（`XLSX.utils.sheet_to_json(ws, {header:1})` 的輸出
  * 形狀），輸出彙總結果。這樣拆的理由：
@@ -4211,7 +4388,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         '  <form class="login-card" id="loginForm">' +
         '    <div>' +
         '      <label for="loginName">帳號</label>' +
-        '      <input type="text" id="loginName" name="name" autocomplete="username" required>' +
+        '      <input type="text" id="loginName" name="name" autocomplete="username" aria-describedby="loginNameHint" required>' +
+        '      <div class="field-hint" id="loginNameHint">帳號就是管理者建立的使用者名稱，中文或英文都可以</div>' +
         '    </div>' +
         '    <div>' +
         '      <label for="loginPass">通行碼</label>' +
@@ -4252,12 +4430,14 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         '    </div>' +
         '    <div>' +
         '      <label for="mustChangeNew1">新通行碼</label>' +
-        '      <input type="password" id="mustChangeNew1" name="new1" autocomplete="new-password" required>' +
+        '      <input type="password" id="mustChangeNew1" name="new1" autocomplete="new-password" aria-describedby="mustChangeNewHint mustChangeChecklist" required>' +
+        '      <div class="field-hint" id="mustChangeNewHint">不能使用常見弱密碼（例如 password、1234567890abc）</div>' +
         '    </div>' +
         '    <div>' +
         '      <label for="mustChangeNew2">再輸入一次新通行碼</label>' +
-        '      <input type="password" id="mustChangeNew2" name="new2" autocomplete="new-password" required>' +
+        '      <input type="password" id="mustChangeNew2" name="new2" autocomplete="new-password" aria-describedby="mustChangeChecklist" required>' +
         '    </div>' +
+        '    <ul class="passcode-checklist" id="mustChangeChecklist" aria-live="polite"></ul>' +
         '    <button type="submit" class="btn-primary" id="mustChangeSubmit"><span id="mustChangeSubmitText">設定通行碼</span></button>' +
         '    <div class="login-error" id="mustChangeError" role="alert"></div>' +
         '    <button type="button" class="btn-secondary hidden" id="mustChangeCancel">取消</button>' +
@@ -4296,6 +4476,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
 
       document.getElementById('loginForm').addEventListener('submit', onLoginSubmit);
       document.getElementById('mustChangeForm').addEventListener('submit', onMustChangeSubmit);
+      ['mustChangeOld', 'mustChangeNew1', 'mustChangeNew2'].forEach(function (id) {
+        document.getElementById(id).addEventListener('input', renderMustChangeChecklist);
+      });
       document.getElementById('mustChangeCancel').addEventListener('click', function () {
         pendingOldPass = null;
         mustChangeMode = null;
@@ -4399,12 +4582,57 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     }
 
     // ---- T20：需更換通行碼／主動更改通行碼，共用同一個畫面 ----
+    // 前端即時檢查清單：呼叫 window.PnlPasscodeRules（src/passcodeRules.js，
+    // 唯一正本，與後端 gas/auth.js／gas/apiWrite.js 逐字對齊，見
+    // test/passcodeRulesParity.test.js）算出每一項的打勾狀態，全部符合才會
+    // 讓「設定通行碼」鈕可以按——不是只做視覺提示，未全部符合時鈕本身就是
+    // disabled，擋掉「明知不合規還是硬按送出」這條路。forced 模式（登入被
+    // 迫換碼）沒有「目前的通行碼」欄位，不傳 oldPass 給 checkPasscode，清單
+    // 就不會出現「不等於舊通行碼」那一項；voluntary 模式（右上角主動改）
+    // 才會出現。
+    function renderMustChangeChecklist() {
+      var checklistEl = document.getElementById('mustChangeChecklist');
+      var submitBtn = document.getElementById('mustChangeSubmit');
+      if (!checklistEl) return;
+      var newPass = document.getElementById('mustChangeNew1').value;
+      var newPass2 = document.getElementById('mustChangeNew2').value;
+      var opts = { name: App.name || '', confirmPass: newPass2 };
+      if (mustChangeMode === 'voluntary') {
+        opts.oldPass = document.getElementById('mustChangeOld').value;
+      }
+      var items = window.PnlPasscodeRules.checkPasscode(newPass, opts);
+      checklistEl.innerHTML = '';
+      items.forEach(function (it) {
+        var li = document.createElement('li');
+        li.className = 'passcode-check-item ' + (it.ok ? 'ok' : 'pending');
+        var mark = document.createElement('span');
+        mark.className = 'passcode-check-mark';
+        mark.setAttribute('aria-hidden', 'true');
+        mark.textContent = it.ok ? '✓' : '○';
+        li.appendChild(mark);
+        var status = document.createElement('span');
+        status.className = 'visually-hidden';
+        status.textContent = it.ok ? '已符合：' : '尚未符合：';
+        li.appendChild(status);
+        li.appendChild(document.createTextNode(it.label));
+        checklistEl.appendChild(li);
+      });
+      if (submitBtn) submitBtn.disabled = !window.PnlPasscodeRules.passcodeAllOk(items);
+    }
+
     function setMustChangeSubmitting(submitting) {
       var btn = document.getElementById('mustChangeSubmit');
       var textEl = document.getElementById('mustChangeSubmitText');
       if (!btn || !textEl) return;
-      btn.disabled = submitting;
       textEl.textContent = submitting ? '處理中…' : '設定通行碼';
+      if (submitting) {
+        btn.disabled = true;
+      } else {
+        // 送出失敗（例如舊通行碼打錯）回來後，鈕是否可按要回到「目前檢查
+        // 清單符不符合」，不能無條件重新啟用——不然使用者打錯舊碼那次的
+        // 失敗訊息還沒處理，鈕卻已經可以再按一次不合規的新碼。
+        renderMustChangeChecklist();
+      }
     }
 
     // mode: 'forced'（登入判定需更換，沒有取消路徑，不能跳過）｜
@@ -4441,6 +4669,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         cancelBtn.classList.remove('hidden');
         oldInput.focus();
       }
+      renderMustChangeChecklist();
     }
 
     function onMustChangeSubmit(ev) {
@@ -4454,6 +4683,15 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         return;
       }
       var oldPass = mustChangeMode === 'forced' ? pendingOldPass : document.getElementById('mustChangeOld').value;
+      // 防呆：checklist 沒全部打勾理論上按鈕已經是 disabled（見
+      // renderMustChangeChecklist），這裡再擋一次，避免表單被用非按鈕的方式
+      // 送出（例如 Enter 鍵在某些瀏覽器組合下的行為差異）。
+      var checkOpts = { name: App.name || '', confirmPass: newPass2 };
+      if (mustChangeMode === 'voluntary') checkOpts.oldPass = oldPass;
+      if (!window.PnlPasscodeRules.isValidNewPasscode(newPass, checkOpts)) {
+        errEl.textContent = '新通行碼不符合規則，請檢查上方清單';
+        return;
+      }
       setMustChangeSubmitting(true);
       call('changeMyPasscode', { old: oldPass, new: newPass })
         .then(function (data) {
@@ -9082,8 +9320,21 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         wrap.appendChild(table);
         panel.appendChild(wrap);
 
+        // T20 前端規則提示：名稱欄下方即時顯示正規化後的存檔結果／格式錯誤／
+        // 重名——規則呼叫 window.PnlPasscodeRules（唯一正本，見
+        // src/passcodeRules.js，與後端 gas/auth.js normalizeUserName_／
+        // assertValidUserName_、gas/apiWrite.js saveUsersTable_ 的重名判斷
+        // 逐字對齊）。改一列的名稱可能讓另一列從「不重複」變成「重複」（或
+        // 反過來），所以每次任何一列輸入都要重新跑「所有列」的預覽，不是只
+        // 更新自己那一列；nameUpdaters 在每次 renderRows() 重建。
+        var nameUpdaters = [];
+        function refreshAllNamePreviews() {
+          nameUpdaters.forEach(function (fn) { fn(); });
+        }
+
         function renderRows() {
           tbody.innerHTML = '';
+          nameUpdaters = [];
           rows.forEach(function (r, idx) {
             var tr = document.createElement('tr');
 
@@ -9091,8 +9342,42 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
             var nameInput = document.createElement('input');
             nameInput.type = 'text';
             nameInput.value = r.name || '';
-            nameInput.addEventListener('input', function () { r.name = nameInput.value; });
+            var nameHintId = 'userNameHint-' + r._localId;
+            nameInput.setAttribute('aria-describedby', nameHintId);
+            var nameHint = el('div', 'field-hint', '中文、英文、數字都可以；不能以 = + - @ 開頭、不能含 |；前後空白自動去除、全形英數轉半形；不能與其他使用者重名');
+            nameHint.id = nameHintId;
+            var namePreview = el('div', 'field-hint', '');
+            namePreview.setAttribute('aria-live', 'polite');
+
+            function updateNamePreview() {
+              var raw = nameInput.value;
+              nameInput.classList.remove('input-error');
+              namePreview.classList.remove('field-inline-error');
+              namePreview.classList.add('field-hint');
+              if (!raw) { namePreview.textContent = ''; return; }
+              var err = window.PnlPasscodeRules.userNameError(raw);
+              if (!err) {
+                var others = rows.filter(function (o) { return o !== r; }).map(function (o) { return o.name; });
+                if (window.PnlPasscodeRules.isDuplicateName(raw, others)) err = '不能與其他使用者重名';
+              }
+              if (err) {
+                namePreview.classList.remove('field-hint');
+                namePreview.classList.add('field-inline-error');
+                nameInput.classList.add('input-error');
+                namePreview.textContent = err;
+              } else {
+                namePreview.textContent = '將存為：' + window.PnlPasscodeRules.normalizeUserName(raw);
+              }
+            }
+            nameUpdaters.push(updateNamePreview);
+            nameInput.addEventListener('input', function () {
+              r.name = nameInput.value;
+              refreshAllNamePreviews();
+            });
+            updateNamePreview();
             nameTd.appendChild(nameInput);
+            nameTd.appendChild(nameHint);
+            nameTd.appendChild(namePreview);
             tr.appendChild(nameTd);
 
             var roleTd = document.createElement('td');
