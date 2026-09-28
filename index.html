@@ -4032,9 +4032,21 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     // 這樣他們第一次打開頁面就不會看到「非預設後端」的確認框。**格式沒過
     // 上面的正規表示式的網址不會列在這裡，也永遠不可能被信任**。
     var KNOWN_BACKENDS = [
-      { name: '麻的小辛辣 新竹光復', url: 'https://script.google.com/macros/s/AKfycbzRpEDKfQDbe5dDBCpS_Vj6Evs7EkneJaISKyNO0T-unp9j0WecoxyTX5Z_o10AKC7g/exec' }
+      { name: '麻的小辛辣 新竹光復', brand: '鼎兆元｜損益系統', url: 'https://script.google.com/macros/s/AKfycbzRpEDKfQDbe5dDBCpS_Vj6Evs7EkneJaISKyNO0T-unp9j0WecoxyTX5Z_o10AKC7g/exec' }
     ];
     var DEFAULT_API_URL = KNOWN_BACKENDS[0].url;
+
+    // 登入前（還沒讀到試算表「系統設定」的系統名稱）顯示的品牌：已知後端可指定
+    // brand，其餘一律「損益系統」。只影響顯示，登入後以試算表的系統名稱為準。
+    function initialBrandName() {
+      try {
+        var url = storageGet(API_URL_STORAGE_KEY) || DEFAULT_API_URL;
+        for (var i = 0; i < KNOWN_BACKENDS.length; i++) {
+          if (KNOWN_BACKENDS[i].url === url && KNOWN_BACKENDS[i].brand) return KNOWN_BACKENDS[i].brand;
+        }
+      } catch (e) { /* 忽略，退回預設 */ }
+      return '損益系統';
+    }
 
     function findKnownBackend(url) {
       var found = null;
@@ -4266,7 +4278,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       role: '',
       stores: [],
       accounts: [],
-      system: { 系統名稱: '麻的小辛辣 損益系統', 主色: '#E8380D' } // 未讀到 getSettings 前的預設
+      system: { 系統名稱: initialBrandName(), 主色: '#E8380D' } // 未讀到 getSettings 前的預設
     };
 
     // ---- C6 error 碼 → 中文訊息（server 若有帶 message 優先用 server 的） ----
@@ -4620,7 +4632,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     function applyBranding(system) {
       system = system || {};
       App.system = system;
-      var name = system['系統名稱'] || '損益系統';
+      var name = system['系統名稱'] || initialBrandName();
       var color = system['主色'];
       document.title = name;
       var brandEl = document.getElementById('topbarBrand');
@@ -4737,7 +4749,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       var app = document.getElementById('app');
       app.innerHTML =
         '<div class="login-screen" id="loginScreen">' +
-        '  <div class="login-brand" id="loginBrand">損益系統</div>' +
+        '  <div class="login-brand" id="loginBrand"></div>' +
         '  <form class="login-card" id="loginForm">' +
         '    <div>' +
         '      <label for="loginName">帳號</label>' +
@@ -4837,7 +4849,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         '  <div class="topbar" id="topbar">' +
         '    <div class="topbar-left">' +
         '      <button type="button" class="hamburger-btn" id="hamburgerBtn" aria-label="開啟選單"></button>' +
-        '      <div class="topbar-brand" id="topbarBrand">損益系統</div>' +
+        '      <div class="topbar-brand" id="topbarBrand"></div>' +
         '    </div>' +
         '    <div class="topbar-user">' +
         '      <span id="topbarUser"><span id="topbarUserName"></span><span id="topbarUserRole" class="topbar-user-role"></span></span>' +
