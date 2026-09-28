@@ -9317,10 +9317,28 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           var had = (w.existing_amounts || []).join('、');
           var splitNote = (w.expected_split_months && w.expected_split_months !== 1) ? '（分攤 ' + w.expected_split_months + ' 個月）' : '';
           return acc + ' 本月的「' + (w.source || '') + '」是 ' + had + '，依目前設定應為 ' + w.expected_amount + splitNote +
-            '；沒有自動改，要更新請作廢那筆後再按建立草稿';
+            '；沒有自動改，按「重新帶入固定值」更新';
         }
         if (w.code === 'NO_FIXED') return acc + ' 是固定科目，但這家店沒設定固定值';
         return w.code + (acc ? '(' + acc + ')' : '');
+      }
+
+      // refresh-fixed：「重新帶入固定值」結果摘要（textContent 顯示）。
+      function formatRefreshFixedResult_(res) {
+        if (!res) return '';
+        var head = (res.store_id || '') + ' ' + (res.month || '') + '：更新 ' + (res.updated || 0) + '、補寫 ' + (res.added || 0) +
+          '、作廢 ' + (res.voided || 0) + '、未變動 ' + (res.unchanged || 0) + (res.skipped ? '、略過 ' + res.skipped : '');
+        var lines = (res.details || []).filter(function (d) { return d.action !== 'unchanged'; }).map(function (d) {
+          var acc = d.acc_id + '（' + d.source + '）';
+          var had = (d.old_amounts || []).join('、');
+          if (d.action === 'updated') return acc + ' ' + had + ' → ' + d.new_amount;
+          if (d.action === 'added') return acc + ' 補寫 ' + d.new_amount;
+          if (d.action === 'voided') return acc + ' 設定已不適用，作廢 ' + had;
+          if (d.reason === 'OTHER_SOURCE') return acc + ' 本月已有其他來源（' + (d.other_sources || []).join('／') + '），未動';
+          if (d.reason === 'PREV_NOT_FINAL') return acc + ' 上月未定稿，結轉未動';
+          return acc + ' ' + d.action;
+        });
+        return lines.length ? head + '；' + lines.join('、') : head;
       }
 
       function formatConnectorIssues_(res) {
@@ -9388,10 +9406,45 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         createBtn.type = 'button';
         createBtn.style.width = 'auto';
         createBtn.disabled = noStores;
+        // refresh-fixed：管理者「重新帶入固定值」——固定值是在建草稿之後才
+        // 補上／改過時（2026-08 光復事故：草稿建時固定值還沒載入，全部寫成
+        // 0），依目前門市固定值重寫這個月的「固定」「上月結轉」明細。
+        var refreshFixedBtn = el('button', 'btn-secondary', '重新帶入固定值');
+        refreshFixedBtn.type = 'button';
+        refreshFixedBtn.style.width = 'auto';
+        refreshFixedBtn.disabled = noStores;
         var msgEl = errorEl('');
         btnRow.appendChild(createBtn);
+        btnRow.appendChild(refreshFixedBtn);
         panel.appendChild(btnRow);
         panel.appendChild(msgEl);
+        var refreshFixedResultEl = el('div', 'refresh-fixed-result', '');
+        panel.appendChild(refreshFixedResultEl);
+
+        refreshFixedBtn.addEventListener('click', function () {
+          if (!storeSelect.value || !monthInput.value) {
+            msgEl.textContent = '請選門市與月份';
+            return;
+          }
+          var sid = storeSelect.value, mon = monthInput.value;
+          msgEl.textContent = '';
+          showConfirmModal('重新帶入固定值', function (card) {
+            card.appendChild(el('div', null, sid + ' ' + mon + '：依「門市固定值」目前的設定（含攤提、起迄月），重寫這個月「固定」與「上月結轉」兩種來源的明細。'));
+            card.appendChild(el('div', null, '金額不同的會作廢舊的、寫新的；缺的會補寫；已不適用的（過了迄月、設定已移除）會作廢；相同的不動。'));
+            card.appendChild(el('div', null, '手動、匯入、連接器、確認為 0 的明細一律不動；已定稿的月份不能用（要先解鎖）。'));
+          }, function () {
+            refreshFixedBtn.disabled = true;
+            refreshFixedResultEl.textContent = '';
+            return call('refreshFixed', { store_id: sid, month: mon }).then(function (res) {
+              refreshFixedBtn.disabled = false;
+              refreshFixedResultEl.textContent = formatRefreshFixedResult_(res);
+              showToast('已重新帶入固定值（更新 ' + (res.updated || 0) + '、補寫 ' + (res.added || 0) + '、作廢 ' + (res.voided || 0) + '）');
+            }, function (err) {
+              refreshFixedBtn.disabled = false;
+              throw err;
+            });
+          }, { confirmLabel: '確認重新帶入' });
+        });
 
         createBtn.addEventListener('click', function () {
           if (!storeSelect.value || !monthInput.value) {
