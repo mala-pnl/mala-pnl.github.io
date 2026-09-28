@@ -112,7 +112,7 @@
   .login-brand {
     font-size: 22px;
     font-weight: 700;
-    color: var(--brand);
+    color: var(--brand-dark);
     text-align: center;
   }
 
@@ -144,7 +144,7 @@
   }
 
   .login-card input:focus {
-    outline: 2px solid var(--brand);
+    outline: 2px solid var(--brand-dark);
     outline-offset: 1px;
   }
 
@@ -884,7 +884,7 @@
     min-height: var(--tap-min);
     padding: 8px 14px;
     border-radius: 8px;
-    border: 1px solid var(--brand);
+    border: 1px solid var(--brand-dark);
     background: #fff;
     color: var(--brand-dark);
     font-weight: 600;
@@ -1116,6 +1116,15 @@
   .invite-form > div { min-width: 0; }
   .invite-form select { min-height: var(--tap-min); }
   .invite-stores label { margin-right: 10px; white-space: nowrap; display: inline-block; }
+  /* store-theme：門市表「品牌色」＝顏色選擇器＋文字框。未設定時選擇器半透明，
+     提示「目前沒有設」（值是占位黑色，存檔送的是文字框的值）。 */
+  /* Fable 審查 PR #56：使用者表檢視者可看門市提示（黃底，同 .warning-banner 色系）。 */
+  .confirm-zero-box { margin-top: 8px; }
+  .store-scope-note { margin-top: 6px; background: #fff8e6; border: 1px solid #f0d787; border-radius: 6px; padding: 4px 8px; font-size: 12px; color: #7a5b06; }
+  .brand-color-field { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .brand-color-picker { width: 36px; height: 32px; padding: 0 2px; flex: 0 0 auto; cursor: pointer; }
+  .brand-color-picker.is-empty { opacity: .35; }
+  .brand-color-text { width: 7.5em; min-width: 0; flex: 1 1 auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .invite-status-unused { color: var(--up); font-weight: 600; }
   .invite-status-muted { color: var(--ink-soft); }
   .invite-copy-row { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
@@ -1299,7 +1308,7 @@
     font-size: 20px;
     letter-spacing: 0.06em;
     background: var(--bg);
-    border: 1px dashed var(--brand);
+    border: 1px dashed var(--brand-dark);
     border-radius: 8px;
     padding: 12px;
     text-align: center;
@@ -4032,7 +4041,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     // 這樣他們第一次打開頁面就不會看到「非預設後端」的確認框。**格式沒過
     // 上面的正規表示式的網址不會列在這裡，也永遠不可能被信任**。
     var KNOWN_BACKENDS = [
-      { name: '麻的小辛辣 新竹光復', brand: '鼎兆元｜損益系統', url: 'https://script.google.com/macros/s/AKfycbzRpEDKfQDbe5dDBCpS_Vj6Evs7EkneJaISKyNO0T-unp9j0WecoxyTX5Z_o10AKC7g/exec' }
+      { name: '麻的小辛辣 新竹光復', brand: '鼎兆元｜損益系統', brandColor: '#1F4E8C', url: 'https://script.google.com/macros/s/AKfycbzRpEDKfQDbe5dDBCpS_Vj6Evs7EkneJaISKyNO0T-unp9j0WecoxyTX5Z_o10AKC7g/exec' }
     ];
     var DEFAULT_API_URL = KNOWN_BACKENDS[0].url;
 
@@ -4046,6 +4055,23 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         }
       } catch (e) { /* 忽略，退回預設 */ }
       return '損益系統';
+    }
+
+    // store-theme（2026-09-28）：登入前的主色同 initialBrandName()——已知後端
+    // 可指定 brandColor（光復正式＝鼎兆元集團藍 #1F4E8C），其餘沿用 CSS 預設
+    // #E8380D。登入後以試算表「系統設定」主色為準，再被門市品牌色覆蓋（見
+    // effectiveThemeColor_）。
+    var DEFAULT_BRAND_COLOR = '#E8380D';
+    function initialBrandColor() {
+      try {
+        var url = storageGet(API_URL_STORAGE_KEY) || DEFAULT_API_URL;
+        for (var i = 0; i < KNOWN_BACKENDS.length; i++) {
+          if (KNOWN_BACKENDS[i].url === url && /^#[0-9a-fA-F]{6}$/.test(KNOWN_BACKENDS[i].brandColor || '')) {
+            return KNOWN_BACKENDS[i].brandColor;
+          }
+        }
+      } catch (e) { /* 忽略，退回預設 */ }
+      return DEFAULT_BRAND_COLOR;
     }
 
     function findKnownBackend(url) {
@@ -4278,7 +4304,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       role: '',
       stores: [],
       accounts: [],
-      system: { 系統名稱: initialBrandName(), 主色: '#E8380D' } // 未讀到 getSettings 前的預設
+      system: { 系統名稱: initialBrandName(), 主色: initialBrandColor() } // 未讀到 getSettings 前的預設
     };
 
     // ---- C6 error 碼 → 中文訊息（server 若有帶 message 優先用 server 的） ----
@@ -4292,7 +4318,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       NOT_FOUND: '找不到資料',
       // invite-register：只有匿名的 registerWithInvite 會回這兩個碼（見 gas/invite.js）。
       INVITE_INVALID: '邀請碼無效、已使用或已過期',
-      NAME_TAKEN: '這個帳號名稱已經有人使用，請換一個'
+      NAME_TAKEN: '這個帳號名稱已經有人使用，請換一個',
+      // Fable 審查 PR #56 輕3：試算表結構異常（例如門市分頁補欄失敗），要人工檢查分頁。
+      BAD_STATE: '試算表結構異常，請管理者檢查分頁表頭'
     };
 
     function errorMessage(err) {
@@ -4628,21 +4656,78 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     }
     window.PnlBrand = { darkenForContrast: darkenForContrast };
 
+    // ---- 主題色（store-theme，2026-09-28）----------------------------------
+    // 規則（唯一正本，所有頁面都走 window.PnlTheme，不各算一份）：
+    //   畫面目前選的門市有品牌色 → 用門市色；
+    //   選「全部合計」、門市沒設、還沒選門市 → 系統主色（試算表「系統設定」）；
+    //   系統主色也沒有／壞值 → 登入前品牌色（initialBrandColor）。
+    // --brand-dark 一律用 darkenForContrast 現算（白字對比 ≥4.5:1）。
+    // documentElement 的 data-theme-source 標示目前來源（store:Sxx／system／
+    // initial），給 e2e 與除錯看，不影響樣式。
+    var THEME = { stores: {}, current: null };
+    function isHexColor(c) { return typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c); }
+    function setBrandColor_(color, source) {
+      document.documentElement.style.setProperty('--brand', color);
+      document.documentElement.style.setProperty('--brand-dark', darkenForContrast(color));
+      document.documentElement.setAttribute('data-theme-source', source);
+    }
+    function effectiveTheme_() {
+      var sid = THEME.current;
+      if (sid && sid !== 'ALL' && isHexColor(THEME.stores[sid])) return { color: THEME.stores[sid], source: 'store:' + sid };
+      if (App.system && isHexColor(App.system['主色'])) return { color: App.system['主色'], source: 'system' };
+      return { color: initialBrandColor(), source: 'initial' };
+    }
+    function applyTheme_() {
+      var t = effectiveTheme_();
+      setBrandColor_(t.color, t.source);
+    }
+    // stores：getSettings 回的門市陣列（{store_id, brand_color, ...}）。只有
+    // 一家看得到的店、還沒選過門市、**而且這個人不能看全部合計**
+    // （App.canSeeAll === false：填寫者／受限檢視者）時，直接把它當目前門市
+    // （登入後一進來就是該門市色）。管理者與可看全部的檢視者預設是「全部
+    // 合計」，維持系統主色（Fable 審查 PR #56 中2）。
+    function setThemeStores(stores) {
+      THEME.stores = {};
+      (stores || []).forEach(function (st) {
+        if (st && st.active !== false && isHexColor(st.brand_color)) THEME.stores[st.store_id] = st.brand_color;
+      });
+      var visible = (stores || []).filter(function (st) { return st && st.active !== false; });
+      if (!THEME.current && visible.length === 1 && App.canSeeAll === false) THEME.current = visible[0].store_id;
+      applyTheme_();
+    }
+    function setThemeStore(storeId) {
+      THEME.current = storeId || null;
+      applyTheme_();
+    }
+    function resetTheme_() {
+      THEME.stores = {};
+      THEME.current = null;
+      App.system = Object.assign({}, App.system || {}, { 主色: initialBrandColor() });
+      setBrandColor_(initialBrandColor(), 'initial');
+    }
+    window.PnlTheme = {
+      setStores: setThemeStores,
+      setStore: setThemeStore,
+      // 設定頁存檔系統主色後的即時預覽：更新系統主色再重算（有選門市色時門市色優先）。
+      setSystemColor: function (color) {
+        if (!isHexColor(color)) return;
+        App.system = Object.assign({}, App.system || {}, { 主色: color });
+        applyTheme_();
+      },
+      current: function () { return effectiveTheme_(); }
+    };
+
     // ---- 套用品牌（系統名稱／主色）----
     function applyBranding(system) {
       system = system || {};
       App.system = system;
       var name = system['系統名稱'] || initialBrandName();
-      var color = system['主色'];
       document.title = name;
       var brandEl = document.getElementById('topbarBrand');
       if (brandEl) brandEl.textContent = name;
       var loginBrandEl = document.getElementById('loginBrand');
       if (loginBrandEl) loginBrandEl.textContent = name;
-      if (color && /^#[0-9a-fA-F]{6}$/.test(color)) {
-        document.documentElement.style.setProperty('--brand', color);
-        document.documentElement.style.setProperty('--brand-dark', darkenForContrast(color));
-      }
+      applyTheme_();
     }
 
     // ---- 畫面狀態切換 ----
@@ -4692,6 +4777,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       App.name = '';
       App.role = '';
       App.stores = [];
+      App.canSeeAll = undefined; // 不讓上一個帳號的「可看全部合計」殘留給下一個帳號
+      resetTheme_(); // store-theme：登出／AUTH 回登入前品牌色
       invalidateDashCache_(); // speed-switch：登出／AUTH 一律清空讀取快取
       pendingOldPass = null; // T20：AUTH／登出當下可能正卡在強制換碼畫面，清掉殘留狀態
       mustChangeMode = null;
@@ -5390,7 +5477,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       call('getSettings', {})
         .then(function (data) {
           App.accounts = data.accounts || [];
+          App.canSeeAll = data.can_see_all !== undefined ? !!data.can_see_all : (App.role !== '填寫者');
+          THEME.stores = {};
           applyBranding(data.system);
+          setThemeStores(data.stores);
           // system 名稱／主色可能在登入後才第一次知道正確值，重繪一次頂列。
           updateTopbarUser();
         })
@@ -5401,6 +5491,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     // 還有效；無效／過期會走 handleApiError → AUTH → showLogin）----
     function boot() {
       renderShellDom();
+      applyTheme_(); // store-theme：登入前就套用已知後端的品牌色（光復＝集團藍）
       // ?api= 格式錯誤是設定錯誤，不是「這次連線失敗」：整頁擋在登入畫面，
       // 不嘗試用任何殘留 token 或預設值繼續跑，避免帳務資料被送到一個看起來
       // 很像但其實打錯字／被竄改過的網址。
@@ -6439,7 +6530,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   window.renderDashboard = function renderDashboard(root) {
     var App = window.App;
     var canEdit = App.role !== '檢視者'; // C6：檢視者唯讀；填寫者/管理者可編輯（本張只做入口是否出現，實際編輯頁見 #9）
-    var canSeeAll = App.role !== '填寫者';
+    // store-theme：檢視者也可能被限定門市（不能看全部合計）。以 getSettings
+    // 回的 can_see_all 為準（見 boot()），舊後端沒有這個欄位時退回角色判斷。
+    var canSeeAll = App.canSeeAll !== undefined ? !!App.canSeeAll : App.role !== '填寫者';
 
     root.innerHTML =
       '<div class="filters"><select id="storeSelect"></select><select id="monthSelect"></select>' +
@@ -6873,6 +6966,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       var seq = ++loadSeq;
       var requestStore = storeSelect.value;
       var requestMonth = monthSelect.value;
+      // store-theme：切換門市即時換色（全部合計→系統主色）。
+      if (window.PnlTheme) window.PnlTheme.setStore(requestStore);
       var key = cacheKey(requestStore, requestMonth);
       var tokenAtRequest = App.token;
       var genAtRequest = dashCache ? dashCache.generation : 0;
@@ -6946,6 +7041,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     function boot() {
       call('getSettings', {}).then(function (settings) {
         App.accounts = settings.accounts || [];
+        if (settings.can_see_all !== undefined) {
+          canSeeAll = !!settings.can_see_all;
+          App.canSeeAll = canSeeAll;
+        }
         var storeIds;
         if (settings.stores) {
           settings.stores.forEach(function (s) { storeNameMap[s.store_id] = s.name; });
@@ -6953,7 +7052,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         } else {
           storeIds = App.stores || [];
         }
-        var effectiveStoreIds = canSeeAll ? storeIds : (App.stores || []);
+        // 非管理者的 settings.stores 已經是後端依權限縮限過的清單；沒有
+        // settings.stores（舊後端）才退回登入時拿到的 App.stores。
+        var effectiveStoreIds = (canSeeAll || settings.stores) ? storeIds : (App.stores || []);
+        if (window.PnlTheme && settings.stores) window.PnlTheme.setStores(settings.stores);
         buildStoreOptions(effectiveStoreIds);
         buildMonthOptions();
 
@@ -6965,7 +7067,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         }
         hideNoStoreHint();
 
-        var defaultStore = canSeeAll ? 'ALL' : (App.stores[0] || storeIds[0] || 'ALL');
+        var defaultStore = canSeeAll ? 'ALL' : (effectiveStoreIds[0] || 'ALL');
         storeSelect.value = defaultStore;
 
         var nowMonth = taipeiMonthNow();
@@ -7677,7 +7779,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       }
 
       // ---- 一個科目卡片 ----
-      function renderAccountCard(account, storeEntries, resultAccounts, pendingSet, canEdit, store_id, month, onChanged) {
+      function renderAccountCard(account, storeEntries, resultAccounts, pendingSet, canEdit, store_id, month, onChanged, monthExists) {
         var accEntries = storeEntries.filter(function (e) { return e.acc_id === account.acc_id && e.void !== true; });
         var isPending = pendingSet[account.acc_id] === true;
 
@@ -7716,7 +7818,48 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           card.appendChild(renderAddForm(account, store_id, month, canEdit, onChanged));
         }
 
+        // Fable 審查 PR #56 追加：待補的手動／連接器科目可以直接「確認為 0」
+        // （寫一筆金額 0、來源「確認為0」的明細），不用等管理者定稿時才勾。
+        // 月份列還沒建立（狀態「無」）時後端會 NOT_FOUND，這裡直接不給按鈕。
+        // Fable 複驗：連接器科目當月（含未來月）仍會自動更新，不給按鈕（後端也擋）。
+        var connectorStillLive = account.mode === '連接器' && month >= taipeiMonthNow();
+        if (isPending && canAddHere && monthExists && !connectorStillLive) {
+          card.appendChild(renderConfirmZero(account, store_id, month, onChanged));
+        }
+
         return card;
+      }
+
+      function renderConfirmZero(account, store_id, month, onChanged) {
+        var box = el('div', 'confirm-zero-box');
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-secondary-neutral confirm-zero-btn';
+        btn.setAttribute('data-acc', account.acc_id);
+        btn.textContent = '確認為 0';
+        var inFlight = false;
+        btn.addEventListener('click', function () {
+          if (inFlight || box.querySelector('.confirm-row')) return;
+          var confirmText = '確定「' + account.name + '」本月確實為 0？會寫一筆金額 0、來源「確認為0」的明細（之後可作廢）。';
+          if (account.mode === '連接器') confirmText += '確認後此科目不再由連接器更新，要恢復請到明細作廢這筆。';
+          var row = buildConfirmRow(confirmText, false, function () {
+            if (inFlight) return;
+            inFlight = true;
+            row.remove();
+            btn.disabled = true;
+            call('confirmZero', { store_id: store_id, month: month, acc_ids: [account.acc_id] }).then(function () {
+              showToast('已確認為 0：' + account.name);
+              onChanged();
+            }).catch(function (err) {
+              inFlight = false;
+              btn.disabled = false;
+              handleApiError(err);
+            });
+          }, function () { row.remove(); });
+          box.appendChild(row);
+        });
+        box.appendChild(btn);
+        return box;
       }
 
       // ---- 定稿／解除定稿 ----
@@ -7884,7 +8027,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           accs.forEach(function (account) {
             body.appendChild(renderAccountCard(
               account, data.entries || [], data.result.accounts || {}, pendingSet,
-              canEdit, requestStore, requestMonth, function () { load(); }
+              canEdit, requestStore, requestMonth, function () { load(); }, status !== '無'
             ));
           });
         });
@@ -7895,6 +8038,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         var seq = ++loadSeq;
         var requestStore = storeSelect.value;
         var requestMonth = monthSelect.value;
+        if (window.PnlTheme && requestStore) window.PnlTheme.setStore(requestStore); // store-theme：切門市即時換色
         if (!requestStore || !requestMonth) return;
         if (!hasRenderedOnce) {
           body.innerHTML = '';
@@ -8655,6 +8799,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           storeSelect.appendChild(opt);
         });
 
+        if (window.PnlTheme && storeSelect.value) window.PnlTheme.setStore(storeSelect.value); // store-theme
+
         monthOptionsList().forEach(function (m) {
           var opt = document.createElement('option');
           opt.value = m; opt.textContent = m;
@@ -8687,6 +8833,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       });
       // 代號模式的「其他來源」檢查跟門市有關，換門市也要重算預覽。
       storeSelect.addEventListener('change', function () {
+        if (window.PnlTheme) window.PnlTheme.setStore(storeSelect.value); // store-theme：切門市即時換色
         if (fileInput.files && fileInput.files.length > 0) runPreview();
       });
       fileInput.addEventListener('change', runPreview);
@@ -8755,6 +8902,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     var BLOCKS = ['營收', '食材', '包材', '人事', '可控', '不可控', '營業稅', '營業外收入'];
     var MODES = ['手動', '匯入', '固定', '公式', '連接器'];
     var ROLES = ['管理者', '填寫者', '檢視者'];
+    var HEX_RE = /^#[0-9a-fA-F]{6}$/;
     var CONNECTOR_TYPES = ['cashbook', 'transfer', 'payroll'];
 
     // T15（#16）落地清單第 6 項：對應 JSON 改用表單編輯（來源鍵下拉→科目
@@ -9364,12 +9512,14 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       // ---- 門市 --------------------------------------------------------
       function renderStoresSection(panel) {
         panel.appendChild(el('div', 'settings-section-title', '門市'));
+        panel.appendChild(el('div', 'field-hint', '品牌色（選填，#RRGGBB）：畫面選到這家店時整個系統換成這個顏色；選「全部合計」或沒設時用「系統設定」的主色。'));
         var wrap = el('div', 'table-wrap');
         var table = document.createElement('table');
         table.className = 'data-table';
+        table.id = 'storesTable';
         var thead = document.createElement('thead');
         var trh = document.createElement('tr');
-        ['store_id', '名稱', '啟用', ''].forEach(function (h) { trh.appendChild(el('th', null, h)); });
+        ['store_id', '名稱', '啟用', '品牌色', ''].forEach(function (h) { trh.appendChild(el('th', null, h)); });
         thead.appendChild(trh);
         table.appendChild(thead);
         var tbody = document.createElement('tbody');
@@ -9404,6 +9554,40 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
             activeTd.appendChild(activeInput);
             tr.appendChild(activeTd);
 
+            // store-theme：品牌色＝顏色選擇器＋文字框（兩邊同步；文字留空＝不設）。
+            var colorTd = document.createElement('td');
+            var colorBox = el('div', 'brand-color-field');
+            var picker = document.createElement('input');
+            picker.type = 'color';
+            picker.className = 'brand-color-picker';
+            picker.id = 'storeColorPicker-' + r.store_id;
+            picker.setAttribute('aria-label', r.store_id + ' 品牌色選擇器');
+            var colorText = document.createElement('input');
+            colorText.type = 'text';
+            colorText.className = 'brand-color-text';
+            colorText.id = 'storeColorText-' + r.store_id;
+            colorText.placeholder = '#RRGGBB（留空＝用系統主色）';
+            colorText.setAttribute('aria-label', r.store_id + ' 品牌色');
+            colorText.maxLength = 7;
+            colorText.value = r.brand_color || '';
+            picker.value = HEX_RE.test(r.brand_color || '') ? r.brand_color.toLowerCase() : '#000000';
+            picker.classList.toggle('is-empty', !r.brand_color);
+            picker.addEventListener('input', function () {
+              r.brand_color = picker.value.toUpperCase();
+              colorText.value = r.brand_color;
+              picker.classList.remove('is-empty');
+            });
+            colorText.addEventListener('input', function () {
+              var v = colorText.value.trim();
+              r.brand_color = v;
+              if (HEX_RE.test(v)) picker.value = v.toLowerCase();
+              picker.classList.toggle('is-empty', !v);
+            });
+            colorBox.appendChild(picker);
+            colorBox.appendChild(colorText);
+            colorTd.appendChild(colorBox);
+            tr.appendChild(colorTd);
+
             var actionTd = document.createElement('td');
             var delBtn = el('button', 'btn-danger', '移除');
             delBtn.type = 'button';
@@ -9423,7 +9607,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         addBtn.type = 'button';
         addBtn.addEventListener('click', function () {
           var id = nextId('S', rows.map(function (r) { return r.store_id; }), 2);
-          rows.push({ store_id: id, name: '', active: true });
+          rows.push({ store_id: id, name: '', active: true, brand_color: '' });
           renderRows();
         });
         panel.appendChild(addBtn);
@@ -9444,14 +9628,17 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
             if (r.store_id === 'ALL') { errEl.textContent = 'store_id 不可為保留字 ALL'; return; }
             if (!r.name) { errEl.textContent = r.store_id + '：名稱必填'; return; }
             if (seen[r.store_id]) { errEl.textContent = 'store_id 重複：' + r.store_id; return; }
+            r.brand_color = (r.brand_color || '').trim().toUpperCase();
+            if (r.brand_color && !HEX_RE.test(r.brand_color)) { errEl.textContent = r.store_id + '：品牌色格式須為 #RRGGBB（或留空）'; return; }
             seen[r.store_id] = true;
           }
           var diff = computeDiff(function (r) { return r.store_id; }, state.data.stores, rows, function (r) {
-            return r.store_id + ' ' + r.name + '（' + (r.active ? '啟用' : '停用') + '）';
+            return r.store_id + ' ' + r.name + '（' + (r.active ? '啟用' : '停用') + (r.brand_color ? '，品牌色 ' + r.brand_color : '') + '）';
           });
           showDiffAndSave('門市', diff, [], function () {
             return saveTable_('stores', rows).then(function () {
               state.data.stores = clone(rows);
+              if (window.PnlTheme) window.PnlTheme.setStores(rows); // 即時套用新品牌色
               showToast('門市已存檔');
             });
           });
@@ -10144,6 +10331,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       function renderUsersSection(panel) {
         panel.appendChild(el('div', 'settings-section-title', '使用者'));
         panel.appendChild(el('div', 'field-inline-error', '新增使用者或重設通行碼會產生 10 碼以上亂數通行碼，只會顯示一次；存檔後才會生效。'));
+        var scopeHint = el('div', 'field-hint', '可看門市：管理者一律全部。檢視者勾「全部門市」或全部不勾＝看全部門市與「全部合計」；勾選個別門市＝只看這幾家、看不到全部合計（就算勾滿每一家也一樣，要看合計請勾「全部門市」）。填寫者至少勾一家，一律看不到全部合計。');
+        scopeHint.id = 'usersScopeHint';
+        panel.appendChild(scopeHint);
 
         var rows = state.draft.users;
         // Fable 對抗審查建議 #6：pendingCodes 掛在 state.usersPendingCodes
@@ -10234,7 +10424,13 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
               if (r.role === role) opt.selected = true;
               roleSelect.appendChild(opt);
             });
-            roleSelect.addEventListener('change', function () { r.role = roleSelect.value; });
+            // Fable 審查 PR #56 中1：換角色一律清空可看門市，避免「填寫者勾的店」
+            // 被悄悄帶去檢視者（變成受限檢視者）或反過來。
+            roleSelect.addEventListener('change', function () {
+              r.role = roleSelect.value;
+              r.stores = [];
+              renderRows();
+            });
             roleTd.appendChild(roleSelect);
             tr.appendChild(roleTd);
 
@@ -10262,6 +10458,27 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
               lbl.appendChild(document.createTextNode(' ' + s.store_id));
               storesBox.appendChild(lbl);
             });
+            // Fable 審查 PR #56 中1（唯讀檢查）＋輕5：檢視者可看門市提示。
+            //  - 已存的檢視者可看門市是具體門市（升級前這欄對檢視者沒作用，升級後
+            //    會生效）→ 標黃「此檢視者目前只看得到：…」。
+            //  - 勾滿每一家但沒勾「全部門市」→ 提醒看不到全部合計。
+            var scopeNote = el('div', 'store-scope-note hidden', '');
+            var savedRow = (state.data.users || []).filter(function (u) { return r._origName && u.name === r._origName; })[0];
+            function updateScopeNote() {
+              var msgs = [];
+              if (r.role === '檢視者' && savedRow && savedRow.role === '檢視者') {
+                var saved = Array.isArray(savedRow.stores) ? savedRow.stores : [];
+                if (saved.length && saved.indexOf('ALL') === -1) {
+                  msgs.push('此檢視者目前只看得到：' + saved.join('、') + '（看不到全部合計）');
+                }
+              }
+              if (r.role === '檢視者' && !allInput.checked && storeChecks.length &&
+                  storeChecks.every(function (sc) { return sc.cb.checked; })) {
+                msgs.push('要看全部合計請改勾「全部門市」');
+              }
+              scopeNote.textContent = msgs.join('；');
+              scopeNote.classList.toggle('hidden', !msgs.length);
+            }
             function syncStores() {
               if (allInput.checked) {
                 r.stores = ['ALL'];
@@ -10270,8 +10487,11 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
                 storeChecks.forEach(function (sc) { sc.cb.disabled = false; });
                 r.stores = storeChecks.filter(function (sc) { return sc.cb.checked; }).map(function (sc) { return sc.id; });
               }
+              updateScopeNote();
             }
             allInput.addEventListener('change', syncStores);
+            storesBox.appendChild(scopeNote);
+            updateScopeNote();
             storesTd.appendChild(storesBox);
             tr.appendChild(storesTd);
 
@@ -10425,8 +10645,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       }
 
       function inviteStoresText_(inv) {
-        if (inv.role === '檢視者') return '全部（檢視者）';
         var ids = inv.stores || [];
+        if (inv.role === '檢視者' && !ids.length) return '全部（含全部合計）';
         if (ids.indexOf('ALL') !== -1) return '全部門市';
         var nameById = {};
         (state.data.stores || []).forEach(function (st) { nameById[st.store_id] = st.name; });
@@ -10503,7 +10723,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
 
         var storesWrap = el('div', 'invite-stores');
         storesWrap.id = 'inviteStores';
-        storesWrap.appendChild(el('div', 'field-hint', '可看門市（填寫者必選）'));
+        var storesHint = el('div', 'field-hint', '可看門市（填寫者必選）');
+        storesHint.id = 'inviteStoresHint';
+        storesWrap.appendChild(storesHint);
         var allLbl = document.createElement('label');
         var allCb = document.createElement('input');
         allCb.type = 'checkbox';
@@ -10528,9 +10750,14 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         });
         form.appendChild(storesWrap);
 
-        roleSelect.addEventListener('change', function () {
-          storesWrap.classList.toggle('hidden', roleSelect.value !== '填寫者');
-        });
+        // store-theme：檢視者也可以限定門市（選填，不勾＝全部門市含全部合計）。
+        function syncInviteStoresHint() {
+          storesHint.textContent = roleSelect.value === '檢視者'
+            ? '可看門市（檢視者選填：不勾或勾「全部門市」＝全部含全部合計；勾個別門市＝只看這幾家）'
+            : '可看門市（填寫者必選）';
+        }
+        roleSelect.addEventListener('change', syncInviteStoresHint);
+        syncInviteStoresHint();
 
         var createBtn = el('button', 'btn-secondary', '產生邀請碼');
         createBtn.type = 'button';
@@ -10618,11 +10845,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         createBtn.addEventListener('click', function () {
           errEl.textContent = '';
           var role = roleSelect.value;
-          var stores = [];
-          if (role === '填寫者') {
-            stores = allCb.checked ? ['ALL'] : storeCbs.filter(function (cb) { return cb.checked; }).map(function (cb) { return cb.value; });
-            if (!stores.length) { errEl.textContent = '填寫者至少要選一家可看門市'; return; }
-          }
+          var stores = allCb.checked ? ['ALL'] : storeCbs.filter(function (cb) { return cb.checked; }).map(function (cb) { return cb.value; });
+          if (role === '填寫者' && !stores.length) { errEl.textContent = '填寫者至少要選一家可看門市'; return; }
           createBtn.disabled = true;
           call('createInvite', { role: role, stores: stores, days: Number(daysSelect.value) }).then(function (inv) {
             createBtn.disabled = false;
@@ -11129,6 +11353,12 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         // 舊的深色，要重新整理過一次才會對——共用 shell.html 掛在
         // window.PnlBrand 的同一套算法，兩邊的「深色」定義才不會兜不起來。
         if (system['系統名稱']) document.title = system['系統名稱'];
+        // store-theme：主題色規則（門市色優先、全部合計用系統主色）統一交給
+        // shell.html 的 window.PnlTheme；舊版 shell 沒有時才走下面的直接套用。
+        if (window.PnlTheme && typeof window.PnlTheme.setSystemColor === 'function') {
+          window.PnlTheme.setSystemColor(system['主色']);
+          return;
+        }
         if (system['主色'] && /^#[0-9a-fA-F]{6}$/.test(system['主色'])) {
           document.documentElement.style.setProperty('--brand', system['主色']);
           if (window.PnlBrand && typeof window.PnlBrand.darkenForContrast === 'function') {
