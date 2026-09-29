@@ -41,6 +41,10 @@
     --nav-bg: #1f2a4d;
     --nav-ink: rgba(255, 255, 255, 0.72);
     --nav-ink-active: #1f2a4d;
+    /* brand-three（2026-09-29）：頂列底色／字色由 shell.html 依品牌主題設定
+       （鼎兆元藍／墨竹亭薄荷＋深藍字／小辛辣紅加深＋白字）；沒品牌＝中性深藍。 */
+    --topbar-bg: var(--nav-bg);
+    --topbar-ink: #fff;
     --sidebar-w: 220px;
     --topbar-h: 56px;
   }
@@ -251,8 +255,8 @@
   }
 
   .topbar {
-    background: var(--nav-bg);
-    color: #fff;
+    background: var(--topbar-bg);
+    color: var(--topbar-ink);
     padding: 0 16px;
     display: flex;
     align-items: center;
@@ -265,10 +269,34 @@
 
   .topbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 
+  /* brand-three：頂列品牌名旁的 logo／字標徽章（三種品牌同高）。logo 縮圖保留
+     品牌底色（完整版 logo 的底色），圓角徽章；鼎兆元無 logo，用字標。 */
+  .brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .brand-mark.hidden { display: none; }
+  .brand-mark img { height: 36px; width: auto; display: block; }
+  .brand-mark-word {
+    padding: 0 8px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.85);
+  }
+  .legend-logo { height: 14px; width: auto; border-radius: 3px; flex-shrink: 0; }
+
   .topbar-brand {
     font-size: 16px;
     font-weight: 700;
-    color: #fff;
+    color: var(--topbar-ink);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -282,7 +310,7 @@
     height: var(--tap-min);
     background: transparent;
     border: none;
-    color: #fff;
+    color: var(--topbar-ink);
     border-radius: 8px;
     flex-shrink: 0;
   }
@@ -308,8 +336,8 @@
     min-height: var(--tap-min);
     min-width: 44px;
     background: rgba(255,255,255,0.2);
-    border: 1px solid rgba(255,255,255,0.6);
-    color: #fff;
+    border: 1px solid currentColor;
+    color: var(--topbar-ink);
     font-weight: 600;
     border-radius: 999px;
     padding: 6px 14px;
@@ -325,6 +353,27 @@
      切換誰看得到，不是動態插拔 DOM。 */
   .btn-logout-icon { display: none; }
   .btn-logout-icon svg { width: 16px; height: 16px; }
+
+  /* brand-three（Fable #61 中2）：「更改通行碼」補正式樣式——透明底、currentColor
+     邊框（同 .btn-logout），在三種品牌頂列（藍／薄荷深藍字／紅）上都跟著字色。 */
+  .btn-changepass {
+    min-height: var(--tap-min);
+    min-width: 44px;
+    background: transparent;
+    border: 1px solid currentColor;
+    color: var(--topbar-ink);
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+  .btn-changepass-icon { display: none; }
+  .btn-changepass-icon svg { width: 16px; height: 16px; }
 
   /* v3：手機底部固定導覽列（<768px）。桌面一律不顯示——即使 DOM 存在
      （renderShellDom 一律建立），.hidden 由 renderTabbar/renderBottomNav
@@ -1116,15 +1165,14 @@
   .invite-form > div { min-width: 0; }
   .invite-form select { min-height: var(--tap-min); }
   .invite-stores label { margin-right: 10px; white-space: nowrap; display: inline-block; }
-  /* store-theme：門市表「品牌色」＝顏色選擇器＋文字框。未設定時選擇器半透明，
-     提示「目前沒有設」（值是占位黑色，存檔送的是文字框的值）。 */
   /* Fable 審查 PR #56：使用者表檢視者可看門市提示（黃底，同 .warning-banner 色系）。 */
   .confirm-zero-box { margin-top: 8px; }
   .store-scope-note { margin-top: 6px; background: #fff8e6; border: 1px solid #f0d787; border-radius: 6px; padding: 4px 8px; font-size: 12px; color: #7a5b06; }
   .brand-color-field { display: flex; align-items: center; gap: 6px; min-width: 0; }
-  .brand-color-picker { width: 36px; height: 32px; padding: 0 2px; flex: 0 0 auto; cursor: pointer; }
-  .brand-color-picker.is-empty { opacity: .35; }
-  .brand-color-text { width: 7.5em; min-width: 0; flex: 1 1 auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  /* brand-three：門市表「品牌色」欄改唯讀——色票＋「顏色依品牌自動套用」。 */
+  .brand-color-swatch { width: 18px; height: 18px; border-radius: 4px; flex: 0 0 auto; border: 1px solid var(--line); }
+  .brand-color-swatch.is-empty { background: repeating-linear-gradient(45deg, #fff, #fff 3px, var(--line) 3px, var(--line) 5px) !important; }
+  .brand-color-auto { font-size: 12px; color: var(--ink-soft); min-width: 0; white-space: normal; }
   .invite-status-unused { color: var(--up); font-weight: 600; }
   .invite-status-muted { color: var(--ink-soft); }
   .invite-copy-row { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
@@ -1969,6 +2017,8 @@
     /* ---- 頂列：更矮、更窄的左右留白 ---- */
     .topbar { padding: 0 10px; }
     .topbar-brand { font-size: 15px; }
+    .brand-mark, .brand-mark img { height: 32px; }
+    .brand-mark-word { font-size: 12px; padding: 0 6px; }
 
     /* ---- 麵包屑手機隱藏 ---- */
     .breadcrumb-bar { display: none; }
@@ -1982,6 +2032,21 @@
     }
     .btn-logout-text { display: none; }
     .btn-logout-icon { display: inline-flex; }
+    /* Fable #61 中2：手機「更改通行碼」改鑰匙圖示（aria-label 補文字），寬 40px。 */
+    .btn-changepass { min-width: 40px; width: 40px; padding: 0; border-radius: 50%; }
+    .btn-changepass-text { display: none; }
+    .btn-changepass-icon { display: inline-flex; }
+    /* Fable #61 中2：系統名稱手機最多兩行（13px），不再被截成「麻的小…」。 */
+    .topbar-brand {
+      font-size: 13px;
+      line-height: 1.2;
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-all;
+    }
 
     /* ---- 底部固定導覽列：儀表板／填資料／匯入／設定，依角色顯示規則
        跟側邊欄一致（renderBottomNav 共用 visibleTabs()）。只有 >1 個可見
@@ -2319,7 +2384,7 @@
   }
 
   .group-units-box { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-  .store-brand-input { min-width: 96px; }
+  .store-brand-select { min-width: 96px; }
 
   /* ---- entry-menu（2026-09-29）：「填資料」展開式子選單＋讀取中遮罩 ---- */
   .tab-group { display: flex; flex-direction: column; gap: 2px; }
@@ -2341,7 +2406,12 @@
   }
   .tab-subbtn:hover { color: #fff; }
   .tab-subbtn[aria-current="page"] { background: rgba(255, 255, 255, 0.16); color: #fff; font-weight: 700; }
+  /* entry-nav：在子頁時父層「填資料」不畫選中膠囊（只高亮子項），避免兩個同時高亮。 */
+  .tab-btn-parent[aria-current="page"] { background: #fff; color: var(--nav-ink-active); font-weight: 700; }
+  .tab-btn-parent[data-child-active="true"] { background: transparent; color: #fff; font-weight: 700; }
 
+  /* entry-nav：父層待補總覽的頁首待補總數。 */
+  .entry-pending-total { font-size: 15px; font-weight: 700; color: var(--ink); margin: 2px 0 10px; }
   .entry-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
   .entry-cat-pills { display: flex; flex-wrap: wrap; gap: 6px; }
   .entry-cat-empty { margin-bottom: 10px; }
@@ -4162,6 +4232,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
 </script>
 
   <script>
+window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,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","小辛辣":"data:image/jpeg;base64,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"};
+</script>
+
+  <script>
   /**
    * T07（#8）外殼：登入、call() 包傳輸層、token 存 sessionStorage、錯誤碼
    * 中文訊息、AUTH 時回登入頁。
@@ -4871,6 +4945,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         return lineIcon(['M4 6h16', 'M4 12h16', 'M4 18h16']);
       },
       // 登出：門＋箭頭（v3 手機版登出鈕改圖示按鈕用）
+      // 鑰匙（brand-three Fable 中2：手機版「更改通行碼」改圖示按鈕）
+      key: function () {
+        return lineIcon(['M21 2l-2 2', 'M15.5 7.5L19 4', 'M15.5 7.5l3 3L22 7l-3-3', 'M11.4 11.6a5.5 5.5 0 11-7.8 7.8 5.5 5.5 0 017.8-7.8z', 'M11.4 11.6L15.5 7.5']);
+      },
       logout: function () {
         return lineIcon(['M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4', 'M16 17l5-5-5-5', 'M21 12H9']);
       }
@@ -4926,40 +5004,111 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     }
     window.PnlBrand = { darkenForContrast: darkenForContrast };
 
-    // ---- 主題色（store-theme，2026-09-28）----------------------------------
+    // ---- 品牌主題（brand-three，2026-09-29，Eason 定）--------------------
+    // 品牌主題只有三種，依門市的「品牌」欄決定，不再逐店設色（門市表的
+    // 「品牌色」欄保留相容舊表，但不再當主題來源）。光復正式與乾淨範本共用
+    // 這一張表；logo 不可設定（window.PNL_BRAND_LOGOS 由 tools/build.sh 從
+    // assets/brand/ 內嵌，見 gas/brandLogosInclude.html）。
+    //   surface ＝頂列／徽章底色；ink ＝ surface 上的字色；accent ＝按鈕等強調色
+    //   （→ --brand，白字一律疊在 --brand-dark＝darkenForContrast(accent) 上）。
+    //   ink 沒指定＝白字；白字對 surface 不到 4.5:1 時頂列改用 darkenForContrast(surface)
+    //   （小辛辣 #E94127 白字 4.0:1 → 頂列加深，logo 徽章保留原底色）。
+    //   鼎兆元無 logo，用字標（藍底白字徽章「鼎兆元」）。
+    var GROUP_BRAND = '鼎兆元';
+    var BRAND_THEMES = {
+      '鼎兆元': { surface: '#1F4E8C', accent: '#1F4E8C', wordmark: '鼎兆元' },
+      '墨竹亭': { surface: '#86CBBF', ink: '#202B66', accent: '#202B66' },
+      '小辛辣': { surface: '#E94127', accent: '#E94127' }
+    };
+    function brandTheme_(brand) {
+      var t = BRAND_THEMES[String(brand || '').trim()];
+      if (!t) return null;
+      var logos = window.PNL_BRAND_LOGOS || {};
+      return { surface: t.surface, ink: t.ink || '', accent: t.accent, wordmark: t.wordmark || '', logo: t.wordmark ? '' : (logos[String(brand).trim()] || '') };
+    }
+
     // 規則（唯一正本，所有頁面都走 window.PnlTheme，不各算一份）：
-    //   畫面目前選的門市有品牌色 → 用門市色；
-    //   選「全部合計」、門市沒設、還沒選門市 → 系統主色（試算表「系統設定」）；
+    //   畫面選到某門市 → 該門市「品牌」的主題；門市沒填品牌（或不是三種之一）→ 系統主色；
+    //   選「全部門市」／還沒選門市：儀表板品牌篩選是墨竹亭／小辛辣 → 該品牌；
+    //     否則（篩選「全部」）→ 鼎兆元——但只有看得到的門市至少一家有品牌時才套
+    //     （乾淨範本別店沒填品牌＝一律系統主色，別店可在「系統設定」自己換主色）；
     //   系統主色也沒有／壞值 → 登入前品牌色（initialBrandColor）。
-    // --brand-dark 一律用 darkenForContrast 現算（白字對比 ≥4.5:1）。
-    // documentElement 的 data-theme-source 標示目前來源（store:Sxx／system／
-    // initial），給 e2e 與除錯看，不影響樣式。
-    var THEME = { stores: {}, current: null };
+    // documentElement 的 data-theme-source（brand:墨竹亭／system／initial）與
+    // data-theme-brand 給 e2e 與除錯看，不影響樣式。
+    var THEME = { stores: {}, current: null, brandFilter: null };
     function isHexColor(c) { return typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c); }
-    function setBrandColor_(color, source) {
-      document.documentElement.style.setProperty('--brand', color);
-      document.documentElement.style.setProperty('--brand-dark', darkenForContrast(color));
+    function setBrandColor_(color, source, bt, brand) {
+      var st = document.documentElement.style;
+      st.setProperty('--brand', color);
+      st.setProperty('--brand-dark', darkenForContrast(color));
+      if (bt) {
+        var ink = bt.ink || '#ffffff';
+        var bar = bt.surface;
+        if (contrastRatio(ink, bar) < 4.5) { ink = '#ffffff'; bar = darkenForContrast(bt.surface); }
+        st.setProperty('--topbar-bg', bar);
+        st.setProperty('--topbar-ink', ink);
+      } else {
+        st.setProperty('--topbar-bg', 'var(--nav-bg)');
+        st.setProperty('--topbar-ink', '#ffffff');
+      }
       document.documentElement.setAttribute('data-theme-source', source);
+      document.documentElement.setAttribute('data-theme-brand', brand || '');
+      renderBrandMark_(bt, brand);
+    }
+    // 頂列品牌名旁的 logo／字標（登入後才看得到頂列）。
+    function renderBrandMark_(bt, brand) {
+      if (typeof document.getElementById !== 'function') return;
+      var mark = document.getElementById('topbarBrandMark');
+      if (!mark) return;
+      mark.innerHTML = '';
+      mark.className = 'brand-mark';
+      mark.style.background = '';
+      mark.removeAttribute('aria-label');
+      if (!bt) { mark.classList.add('hidden'); return; }
+      if (bt.logo) {
+        var img = document.createElement('img');
+        img.src = bt.logo;
+        img.alt = brand;
+        mark.appendChild(img);
+      } else {
+        mark.classList.add('brand-mark-word');
+        mark.style.background = bt.surface;
+        mark.textContent = bt.wordmark || brand;
+        mark.setAttribute('aria-label', brand);
+      }
+    }
+    function anyBrandedStore_() {
+      return Object.keys(THEME.stores).some(function (sid) { return !!BRAND_THEMES[THEME.stores[sid]]; });
+    }
+    function systemTheme_() {
+      if (App.system && isHexColor(App.system['主色'])) return { color: App.system['主色'], source: 'system', brand: '' };
+      return { color: initialBrandColor(), source: 'initial', brand: '' };
     }
     function effectiveTheme_() {
       var sid = THEME.current;
-      if (sid && sid !== 'ALL' && isHexColor(THEME.stores[sid])) return { color: THEME.stores[sid], source: 'store:' + sid };
-      if (App.system && isHexColor(App.system['主色'])) return { color: App.system['主色'], source: 'system' };
-      return { color: initialBrandColor(), source: 'initial' };
+      var brand = '';
+      if (sid && sid !== 'ALL') {
+        brand = THEME.stores[sid] || '';
+      } else if (anyBrandedStore_()) {
+        brand = (THEME.brandFilter && BRAND_THEMES[THEME.brandFilter]) ? THEME.brandFilter : GROUP_BRAND;
+      }
+      var bt = brandTheme_(brand);
+      if (bt) return { color: bt.accent, source: 'brand:' + brand, brand: brand, theme: bt };
+      return systemTheme_();
     }
     function applyTheme_() {
       var t = effectiveTheme_();
-      setBrandColor_(t.color, t.source);
+      setBrandColor_(t.color, t.source, t.theme || null, t.brand);
     }
-    // stores：getSettings 回的門市陣列（{store_id, brand_color, ...}）。只有
+    // stores：getSettings 回的門市陣列（{store_id, brand, ...}）。只有
     // 一家看得到的店、還沒選過門市、**而且這個人不能看全部合計**
     // （App.canSeeAll === false：填寫者／受限檢視者）時，直接把它當目前門市
-    // （登入後一進來就是該門市色）。管理者與可看全部的檢視者預設是「全部
-    // 合計」，維持系統主色（Fable 審查 PR #56 中2）。
+    // （登入後一進來就是該門市品牌）。管理者與可看全部的檢視者預設是「全部
+    // 合計」＝鼎兆元（Fable 審查 PR #56 中2）。
     function setThemeStores(stores) {
       THEME.stores = {};
       (stores || []).forEach(function (st) {
-        if (st && st.active !== false && isHexColor(st.brand_color)) THEME.stores[st.store_id] = st.brand_color;
+        if (st && st.active !== false) THEME.stores[st.store_id] = String(st.brand || '').trim();
       });
       var visible = (stores || []).filter(function (st) { return st && st.active !== false; });
       if (!THEME.current && visible.length === 1 && App.canSeeAll === false) THEME.current = visible[0].store_id;
@@ -4969,11 +5118,16 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       THEME.current = storeId || null;
       applyTheme_();
     }
+    function setThemeBrandFilter(brand) {
+      THEME.brandFilter = brand && brand !== '全部' ? brand : null;
+      applyTheme_();
+    }
     function resetTheme_() {
       THEME.stores = {};
       THEME.current = null;
+      THEME.brandFilter = null;
       App.system = Object.assign({}, App.system || {}, { 主色: initialBrandColor() });
-      setBrandColor_(initialBrandColor(), 'initial');
+      setBrandColor_(initialBrandColor(), 'initial', null, '');
     }
     // dashboard-redesign（2026-09-29）：門市顯示名稱＝有品牌、而且名稱裡還
     // 沒有品牌字樣時，前面加品牌（例如 S01「新竹光復」＋品牌「小辛辣」→
@@ -4990,12 +5144,17 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     window.PnlTheme = {
       setStores: setThemeStores,
       setStore: setThemeStore,
-      // 設定頁存檔系統主色後的即時預覽：更新系統主色再重算（有選門市色時門市色優先）。
+      // 儀表板「全部門市」的品牌篩選：墨竹亭／小辛辣 → 該品牌主題；全部 → 鼎兆元。
+      setBrandFilter: setThemeBrandFilter,
+      // 設定頁存檔系統主色後的即時預覽：更新系統主色再重算（有品牌的門市仍用品牌主題）。
       setSystemColor: function (color) {
         if (!isHexColor(color)) return;
         App.system = Object.assign({}, App.system || {}, { 主色: color });
         applyTheme_();
       },
+      // 品牌主題表（唯讀），給設定頁色票與儀表板圖例 logo 用。
+      brandTheme: brandTheme_,
+      brands: function () { return Object.keys(BRAND_THEMES); },
       current: function () { return effectiveTheme_(); }
     };
 
@@ -5059,6 +5218,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       App.entryCategory = null;
       App.entryLastStore = null;
       App.entryLastMonth = null;
+      App.lastMonth = null; // 儀表板／填資料共用的最後選月份
       App.dashBrandFilter = null; // Fable #59 輕6：儀表板品牌篩選／圖例是記憶體狀態，登出清掉
       App.dashHiddenSeries = null;
       App.dashLegendTouched = false;
@@ -5225,11 +5385,15 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         '  <div class="topbar" id="topbar">' +
         '    <div class="topbar-left">' +
         '      <button type="button" class="hamburger-btn" id="hamburgerBtn" aria-label="開啟選單"></button>' +
+        '      <span class="brand-mark hidden" id="topbarBrandMark"></span>' +
         '      <div class="topbar-brand" id="topbarBrand"></div>' +
         '    </div>' +
         '    <div class="topbar-user">' +
         '      <span id="topbarUser"><span id="topbarUserName"></span><span id="topbarUserRole" class="topbar-user-role"></span></span>' +
-        '      <button class="btn-changepass" id="changePasscodeBtn" type="button">更改通行碼</button>' +
+        '      <button class="btn-changepass" id="changePasscodeBtn" type="button" aria-label="更改通行碼">' +
+        '        <span class="btn-changepass-icon" id="changePassIcon"></span>' +
+        '        <span class="btn-changepass-text">更改通行碼</span>' +
+        '      </button>' +
         '      <button class="btn-logout" id="logoutBtn" type="button" aria-label="登出">' +
         '        <span class="btn-logout-icon" id="logoutIcon"></span>' +
         '        <span class="btn-logout-text">登出</span>' +
@@ -5277,6 +5441,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         showMustChange('voluntary');
       });
       document.getElementById('logoutIcon').appendChild(window.PnlIcon.logout());
+      document.getElementById('changePassIcon').appendChild(window.PnlIcon.key());
       document.getElementById('logoutBtn').addEventListener('click', function () { logout(''); });
       document.getElementById('backendConfirmYes').addEventListener('click', function () {
         confirmBackend();
@@ -5654,6 +5819,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     // 維護、對不起來。
     function selectTab(tabId) {
       activeTabId = tabId;
+      // Fable #61 輕：品牌篩選只在儀表板「全部門市」生效；離開儀表板清掉主題的
+      // 品牌篩選，主題回依目前門市（儀表板自己的 App.dashBrandFilter 保留，回來再套）。
+      if (tabId !== 'dashboard' && THEME.brandFilter) setThemeBrandFilter(null);
       renderTabbar();
       renderBottomNav();
       renderActiveTab();
@@ -5673,6 +5841,13 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       { key: 'revenue', label: '營業收入', blocks: ['營收'] }
     ];
     window.PnlEntryCategories = ENTRY_CATEGORIES;
+    // entry-nav（2026-09-29，Eason 釐清）：父層「填資料」＝所有類別的待補總覽
+    // （App.entryCategory＝'pending' 或還沒選過）；子項目＝該類別完整資料。
+    var ENTRY_PENDING_KEY = 'pending';
+    window.PnlEntryPendingKey = ENTRY_PENDING_KEY;
+    function entryIsPendingView_() {
+      return !App.entryCategory || App.entryCategory === ENTRY_PENDING_KEY;
+    }
     var entryMenuOpen = false;
     function selectEntryCategory(key) {
       App.entryCategory = key;
@@ -5732,8 +5907,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       btn.className = 'tab-btn tab-btn-parent';
       btn.type = 'button';
       btn.id = 'entryMenuToggle';
-      btn.setAttribute('role', 'tab');
-      btn.setAttribute('aria-selected', String(activeTabId === 'entry'));
+      // Fable #62 輕：父層是「展開／收合＋回總覽」的按鈕，不是分頁——只用
+      // aria-expanded（＋總覽時 aria-current=page），不當分頁、不標分頁選取狀態。
       btn.setAttribute('aria-expanded', String(entryMenuOpen));
       btn.setAttribute('aria-controls', 'entrySubmenu');
       var iconFn = TAB_ICON[t.id];
@@ -5741,10 +5916,15 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       var labelSpan = document.createElement('span');
       labelSpan.textContent = t.label;
       btn.appendChild(labelSpan);
+      // entry-nav：子頁選中時父層不再畫成選中膠囊（只高亮子項），父層待補總覽才高亮父層。
+      var childActive = activeTabId === 'entry' && !entryIsPendingView_();
+      btn.setAttribute('data-child-active', String(childActive));
+      if (activeTabId === 'entry' && entryIsPendingView_()) btn.setAttribute('aria-current', 'page');
       btn.addEventListener('click', function () {
-        if (activeTabId !== 'entry') {
+        // 不在填資料頁，或在子頁 → 回父層待補總覽（展開子選單）；已在父層 → 展開／收合。
+        if (activeTabId !== 'entry' || !entryIsPendingView_()) {
           entryMenuOpen = true;
-          selectTab('entry');
+          selectEntryCategory(ENTRY_PENDING_KEY);
           return;
         }
         entryMenuOpen = !entryMenuOpen;
@@ -5757,7 +5937,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       sub.id = 'entrySubmenu';
       sub.setAttribute('role', 'group');
       sub.setAttribute('aria-label', '填資料類別');
-      var current = App.entryCategory || ENTRY_CATEGORIES[0].key;
+      var current = App.entryCategory;
       ENTRY_CATEGORIES.forEach(function (c) {
         var b = document.createElement('button');
         b.type = 'button';
@@ -5809,7 +5989,11 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         var labelSpan = document.createElement('span');
         labelSpan.textContent = t.label;
         btn.appendChild(labelSpan);
-        btn.addEventListener('click', function () { selectTab(t.id); });
+        btn.addEventListener('click', function () {
+          // entry-nav：手機底部「填資料」＝父層行為（所有類別待補總覽）。
+          if (t.id === 'entry') { selectEntryCategory(ENTRY_PENDING_KEY); return; }
+          selectTab(t.id);
+        });
         bar.appendChild(btn);
       });
     }
@@ -6222,15 +6406,12 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     var x = hexToOklab(a), y = hexToOklab(b);
     return Math.sqrt(Math.pow(x[0] - y[0], 2) + Math.pow(x[1] - y[1], 2) + Math.pow(x[2] - y[2], 2)) * 100;
   }
-  function isHex6(c) { return typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c); }
-  // 白底上太淡的品牌色（例如淡黃）線條看不見：OKLab 亮度 > 0.86 視同沒設。
-  function usableOnWhite(hex) { return hexToOklab(hex)[0] <= 0.86; }
-
-  // stores：[{store_id, brand_color}]，依門市順序。回傳 {sid: {color, dash}}。
-  // 先用門市品牌色；沒設、太淡、或跟已分配的顏色太像（ΔE<8，含同色）→ 改
-  // 用調色盤下一個夠不同的顏色；8 色都用完才重複色相、改畫虛線（第二種
-  // 編碼，dataviz：不自己生第 9 個色相）。整份清單一次分配，篩選／隱藏不重
-  // 新上色（色隨門市、不隨排名）。
+  // stores：[{store_id}]，依門市順序。回傳 {sid: {color, dash}}。
+  // brand-three（2026-09-29）：品牌主題只有三種、同品牌各店共用主色，線色不再
+  // 用門市品牌色，改回 dataviz 調色盤逐店分配（同圖內任兩條 ΔE ≥ 8 才算分得
+  // 開）；分不開的顏色用完才重複色相、改畫虛線（第二種編碼，不自己生第 9 個
+  // 色相）。整份清單一次分配，篩選／隱藏不重新上色（色隨門市、不隨排名）。
+  // 品牌改由圖例旁的小 logo 表達。
   function assignSeriesColors(stores) {
     var used = [];
     var out = {};
@@ -6239,13 +6420,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       return used.every(function (u) { return colorDeltaE(u, c) >= SERIES_MIN_DELTA_E; });
     }
     (stores || []).forEach(function (s) {
-      var own = isHex6(s.brand_color) ? s.brand_color.toLowerCase() : '';
       var pick = null, dash = '';
-      if (own && usableOnWhite(own) && farEnough(own)) pick = own;
-      if (!pick) {
-        for (var i = 0; i < SERIES_PALETTE.length; i++) {
-          if (farEnough(SERIES_PALETTE[i])) { pick = SERIES_PALETTE[i]; break; }
-        }
+      for (var i = 0; i < SERIES_PALETTE.length; i++) {
+        if (farEnough(SERIES_PALETTE[i])) { pick = SERIES_PALETTE[i]; break; }
       }
       if (!pick) {
         pick = SERIES_PALETTE[cycle % SERIES_PALETTE.length];
@@ -6523,6 +6700,14 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       key.style.borderTopColor = it.color;
       if (it.dash) key.style.borderTopStyle = 'dashed';
       btn.appendChild(key);
+      if (it.logo) {
+        // brand-three：同品牌共用主色，圖例旁放品牌小 logo（裝飾，名稱已帶品牌）。
+        var logo = document.createElement('img');
+        logo.className = 'legend-logo';
+        logo.src = it.logo;
+        logo.alt = '';
+        btn.appendChild(logo);
+      }
       btn.appendChild(document.createTextNode(it.name));
       btn.addEventListener('click', function () { onToggle(it.id); });
       wrap.appendChild(btn);
@@ -6920,6 +7105,11 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     // 名稱帶品牌前綴（兩家「新竹光復」才分得出來），規則在 shell.html
     // window.PnlStoreLabel，全站共用。
     var storeMeta = {};
+    function brandLogo(sid) {
+      var b = storeMeta[sid] && storeMeta[sid].brand;
+      var bt = b && window.PnlTheme && window.PnlTheme.brandTheme ? window.PnlTheme.brandTheme(b) : null;
+      return bt ? bt.logo : '';
+    }
     function storeLabel(sid) {
       return storeNameMap[sid] || sid;
     }
@@ -7190,14 +7380,14 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       section.innerHTML = '';
       var isAll = ctx.isAll;
       var multi = ctx.multi;
-      var colors = assignSeriesColors(multiStoreIds().map(function (sid) {
-        return { store_id: sid, brand_color: storeMeta[sid] ? storeMeta[sid].brand_color : '' };
-      }));
+      var colors = assignSeriesColors(multiStoreIds().map(function (sid) { return { store_id: sid }; }));
       var nowMonth = taipeiMonthNow();
 
       // ---- 品牌篩選＋圖例（只在全部門市） ----
       var brands = isAll ? brandOptions() : [];
       if (brandFilter !== '全部' && brands.indexOf(brandFilter) === -1) brandFilter = '全部';
+      // brand-three：全部門市時品牌篩選決定主題（全部＝鼎兆元、墨竹亭／小辛辣＝該品牌）。
+      if (isAll && window.PnlTheme && window.PnlTheme.setBrandFilter) window.PnlTheme.setBrandFilter(brandFilter);
       var seriesStores = [];
       if (isAll) {
         seriesStores = visibleMultiStoreIds(multi);
@@ -7227,7 +7417,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         }
         if (seriesStores.length > 1) {
           bar.appendChild(buildSeriesLegend(seriesStores.map(function (sid) {
-            return { id: sid, name: storeLabel(sid), color: colors[sid].color, dash: colors[sid].dash };
+            return { id: sid, name: storeLabel(sid), color: colors[sid].color, dash: colors[sid].dash, logo: brandLogo(sid) };
           }), hiddenSeries, function (sid) {
             App.dashLegendTouched = true;
             if (hiddenSeries[sid]) delete hiddenSeries[sid]; else hiddenSeries[sid] = true;
@@ -7460,7 +7650,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       var seq = ++loadSeq;
       var requestStore = storeSelect.value;
       var requestMonth = monthSelect.value;
-      // store-theme：切換門市即時換色（全部合計→系統主色）。
+      if (requestMonth) App.lastMonth = requestMonth; // 與填資料共用
+      // brand-three：切換門市即時換品牌主題（門市→該店品牌；全部→品牌篩選／鼎兆元）。
+      if (window.PnlTheme && window.PnlTheme.setBrandFilter) window.PnlTheme.setBrandFilter(App.dashBrandFilter || '全部');
       if (window.PnlTheme) window.PnlTheme.setStore(requestStore);
       var key = cacheKey(requestStore, requestMonth);
       var tokenAtRequest = App.token;
@@ -7554,7 +7746,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         if (settings.stores) {
           settings.stores.forEach(function (s) {
             storeNameMap[s.store_id] = window.PnlStoreLabel ? window.PnlStoreLabel(s) : s.name;
-            storeMeta[s.store_id] = { name: s.name, brand: String(s.brand || '').trim(), unit_type: String(s.unit_type || ''), brand_color: s.brand_color || '' };
+            storeMeta[s.store_id] = { name: s.name, brand: String(s.brand || '').trim(), unit_type: String(s.unit_type || '') };
           });
           storeIds = settings.stores.filter(function (s) { return s.active !== false; }).map(function (s) { return s.store_id; }); // 停用門市（例如剛載入、還沒啟用的集團單位）不列
         } else {
@@ -7579,6 +7771,11 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         storeSelect.value = defaultStore;
 
         var nowMonth = taipeiMonthNow();
+        // Fable #61：儀表板與填資料共用 App.lastMonth——切頁回來沿用上次的月份，不跳回預設月。
+        if (App.lastMonth && monthOptions().indexOf(App.lastMonth) !== -1) {
+          monthSelect.value = App.lastMonth;
+          return null;
+        }
         return call('getTrend', { store_id: defaultStore, month: nowMonth, n: 12 }).then(function (probe) {
           var isAllProbe = defaultStore === 'ALL';
           var found = null;
@@ -7903,10 +8100,12 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       var body = document.getElementById('entryBody');
       var storeNameMap = {};
       var hasRenderedOnce = false;
-      // entry-menu（2026-09-29）：類別（側邊欄「填資料」子選單／頁內膠囊）
-      // 與「顯示已填」開關。預設只列待補（估算值科目本月沒有真實明細，仍算
-      // 待補）；打開才列已填科目（可查看、作廢）。類別跨頁記在 App（記憶體），
-      // 「顯示已填」每次進頁預設關。
+      // entry-menu（2026-09-29）→ entry-nav（2026-09-29，Eason 釐清）：
+      //   父層「填資料」／膠囊「待補」＝所有類別的待補總覽（依類別分組、不列已填／
+      //   選填，頁首待補總數，0＝「本月資料已齊」）；
+      //   子項目（食材／人事／可控／不可控／營業收入）＝該類別完整資料（待補、選填、
+      //   已填、固定／公式唯讀全列），不再有「只看待補」以外的開關。
+      //   類別跨頁記在 App.entryCategory（記憶體；'pending' 或沒選過＝父層）。
       var CATS = window.PnlEntryCategories || [
         { key: 'food', label: '食材費用', blocks: ['食材', '包材'] },
         { key: 'labor', label: '人事費用', blocks: ['人事'] },
@@ -7914,14 +8113,19 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         { key: 'uncontrollable', label: '不可控費用', blocks: ['不可控', '營業稅', '營業外收入'] },
         { key: 'revenue', label: '營業收入', blocks: ['營收'] }
       ];
+      var PENDING_KEY = window.PnlEntryPendingKey || 'pending';
+      function isPendingView() { return !App.entryCategory || App.entryCategory === PENDING_KEY; }
       function currentCat() {
-        var key = App.entryCategory || CATS[0].key;
-        return CATS.filter(function (c) { return c.key === key; })[0] || CATS[0];
+        return CATS.filter(function (c) { return c.key === App.entryCategory; })[0] || null;
       }
-      var showFilled = false;
-      var lastRender = null; // {data, requestStore, requestMonth}：切類別／開關時直接重畫，不重抓
+      var lastRender = null; // {data, requestStore, requestMonth}：切類別時直接重畫，不重抓
       var shownKey = null; // 目前畫面上是哪個 store|month（切換時才遮罩）
 
+      function setCategory(key) {
+        if (window.PnlSetEntryCategory) window.PnlSetEntryCategory(key); else App.entryCategory = key;
+        renderToolbar();
+        rerender();
+      }
       function renderToolbar() {
         var bar = document.getElementById('entryToolbar');
         if (!bar) return;
@@ -7929,32 +8133,22 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         var pills = el('div', 'filter-pills entry-cat-pills');
         pills.setAttribute('role', 'group');
         pills.setAttribute('aria-label', '填資料類別');
-        var cur = currentCat();
+        var pend = isPendingView();
+        var pb = el('button', 'filter-pill', '待補');
+        pb.type = 'button';
+        pb.id = 'entryCat-' + PENDING_KEY;
+        pb.setAttribute('aria-pressed', String(pend));
+        pb.addEventListener('click', function () { setCategory(PENDING_KEY); });
+        pills.appendChild(pb);
         CATS.forEach(function (c) {
           var b = el('button', 'filter-pill', c.label);
           b.type = 'button';
           b.id = 'entryCat-' + c.key;
-          b.setAttribute('aria-pressed', String(c.key === cur.key));
-          b.addEventListener('click', function () {
-            if (window.PnlSetEntryCategory) window.PnlSetEntryCategory(c.key); else App.entryCategory = c.key;
-            renderToolbar();
-            rerender();
-          });
+          b.setAttribute('aria-pressed', String(!pend && c.key === App.entryCategory));
+          b.addEventListener('click', function () { setCategory(c.key); });
           pills.appendChild(b);
         });
         bar.appendChild(pills);
-        var label = el('label', 'filter-toggle');
-        var cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.id = 'entryShowFilled';
-        cb.checked = showFilled;
-        cb.addEventListener('change', function () {
-          showFilled = cb.checked;
-          rerender();
-        });
-        label.appendChild(cb);
-        label.appendChild(document.createTextNode('顯示已填'));
-        bar.appendChild(label);
       }
       function rerender() {
         if (lastRender) renderBody(lastRender.data, lastRender.requestStore, lastRender.requestMonth);
@@ -8616,36 +8810,55 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         var liveByAcc = {};
         (data.entries || []).forEach(function (e) { if (e && e.void !== true) liveByAcc[e.acc_id] = true; });
         function isFilled(a) { return entryAccountIsFilled(a, pendingSet, liveByAcc); }
+        function card(account) {
+          return renderAccountCard(
+            account, data.entries || [], data.result.accounts || {}, pendingSet,
+            canEdit, requestStore, requestMonth, function () { load(); }, status !== '無'
+          );
+        }
+        // 父層：所有類別的待補（不列已填、不列選填），依類別分組，頁首待補總數。
+        if (isPendingView()) {
+          var groups = [];
+          var total = 0;
+          CATS.forEach(function (c) {
+            var accs = [];
+            c.blocks.forEach(function (block) {
+              (accountsByBlock[block] || []).forEach(function (a) {
+                if (!isFilled(a) && !entryAccountIsOptionalEmpty(a, pendingSet, liveByAcc)) accs.push(a);
+              });
+            });
+            if (accs.length) { groups.push({ cat: c, accs: accs }); total += accs.length; }
+          });
+          var summary = el('div', 'entry-pending-total', total ? '本月待補 ' + total + ' 項' : '本月資料已齊');
+          summary.id = 'entryPendingTotal';
+          summary.setAttribute('role', 'status');
+          body.insertBefore(summary, body.firstChild);
+          if (!total) {
+            body.appendChild(el('div', 'empty-state entry-cat-empty', '本月資料已齊，沒有待補科目。要查看或修改已填資料，請點上方類別。'));
+            return;
+          }
+          groups.forEach(function (g) {
+            var head = el('div', 'section-title entry-group-title', g.cat.label + '（' + g.accs.length + '）');
+            head.setAttribute('data-cat', g.cat.key);
+            body.appendChild(head);
+            g.accs.forEach(function (account) { body.appendChild(card(account)); });
+          });
+          return;
+        }
+        // 子項目：該類別完整資料（待補／已填在前、選填且無明細在後）。
         var cat = currentCat();
         var shownCount = 0;
-        var hiddenFilled = 0;
         cat.blocks.forEach(function (block) {
-          // 預設＝待補＋選填（選填排在待補之後、灰色「選填」徽章、不算待補）；
-          // 「顯示已填」只控制已填科目。總部手填收入 A098 這類選填科目才找得到。
-          var accs = (accountsByBlock[block] || []).filter(function (a) {
-            if (showFilled || !isFilled(a)) return true;
-            hiddenFilled++;
-            return false;
-          });
-          accs = entrySortOptionalLast(accs, pendingSet, liveByAcc);
+          var accs = entrySortOptionalLast(accountsByBlock[block] || [], pendingSet, liveByAcc);
           if (accs.length === 0) return;
           body.appendChild(el('div', 'section-title', block));
           accs.forEach(function (account) {
             shownCount++;
-            body.appendChild(renderAccountCard(
-              account, data.entries || [], data.result.accounts || {}, pendingSet,
-              canEdit, requestStore, requestMonth, function () { load(); }, status !== '無'
-            ));
+            body.appendChild(card(account));
           });
         });
-        var hiddenParts = [];
-        if (hiddenFilled) hiddenParts.push('已填 ' + hiddenFilled + ' 個');
         if (shownCount === 0) {
-          body.appendChild(el('div', 'empty-state entry-cat-empty',
-            showFilled ? '「' + cat.label + '」沒有科目'
-              : '「' + cat.label + '」沒有待補科目' + (hiddenParts.length ? '（' + hiddenParts.join('、') + '，打開「顯示已填」可查看）' : '')));
-        } else if (!showFilled && hiddenParts.length) {
-          body.appendChild(el('div', 'field-hint', '另有' + hiddenParts.join('、') + '科目，打開上方「顯示已填」可查看、填寫或作廢。'));
+          body.appendChild(el('div', 'empty-state entry-cat-empty', '「' + cat.label + '」沒有科目'));
         }
       }
 
@@ -8658,6 +8871,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         if (!requestStore || !requestMonth) return;
         App.entryLastStore = requestStore;
         App.entryLastMonth = requestMonth;
+        App.lastMonth = requestMonth; // Fable #61：與儀表板共用
         if (!hasRenderedOnce) {
           body.innerHTML = '';
         }
@@ -8712,8 +8926,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           // entry-menu：回到填資料頁（例如從子選單進來）沿用上次選的門市／月份。
           var defaultStore = (App.entryLastStore && visibleStoreIds.indexOf(App.entryLastStore) !== -1) ? App.entryLastStore : (visibleStoreIds[0] || '');
           storeSelect.value = defaultStore;
-          var lastMonthOk = App.entryLastMonth && monthOptions().indexOf(App.entryLastMonth) !== -1;
-          monthSelect.value = lastMonthOk ? App.entryLastMonth : taipeiMonthNow();
+          var lastMonthOk = App.lastMonth && monthOptions().indexOf(App.lastMonth) !== -1;
+          monthSelect.value = lastMonthOk ? App.lastMonth : taipeiMonthNow();
           load();
         }).catch(function (err) {
           bootDone();
@@ -9578,6 +9792,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     var MODES = ['手動', '匯入', '固定', '公式', '連接器'];
     var ROLES = ['管理者', '填寫者', '檢視者'];
     var HEX_RE = /^#[0-9a-fA-F]{6}$/;
+    // brand-three（2026-09-29）：門市「品牌」只能是這三個或空白（後端 saveStoresTable_ 同一份清單）。
+    var STORE_BRANDS = ['鼎兆元', '墨竹亭', '小辛辣'];
     var CONNECTOR_TYPES = ['cashbook', 'transfer', 'payroll'];
 
     // T15（#16）落地清單第 6 項：對應 JSON 改用表單編輯（來源鍵下拉→科目
@@ -10257,17 +10473,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       // ---- 門市 --------------------------------------------------------
       function renderStoresSection(panel) {
         panel.appendChild(el('div', 'settings-section-title', '門市'));
-        panel.appendChild(el('div', 'field-hint', '品牌色（選填，#RRGGBB）：畫面選到這家店時整個系統換成這個顏色；選「全部合計」或沒設時用「系統設定」的主色。'));
-        panel.appendChild(el('div', 'field-hint', '品牌（選填，例如鼎兆元／墨竹亭／小辛辣）與類型（總部／門市／央廚）：儀表板「全部門市」的品牌篩選與各店比較用；名稱裡沒有品牌字樣時，畫面會自動在前面加上品牌。'));
-        // dashboard-redesign：品牌輸入框的建議清單（可自訂文字，不限這三個）。
-        var brandList = document.createElement('datalist');
-        brandList.id = 'storeBrandOptions';
-        ['鼎兆元', '墨竹亭', '小辛辣'].forEach(function (b) {
-          var o = document.createElement('option');
-          o.value = b;
-          brandList.appendChild(o);
-        });
-        panel.appendChild(brandList);
+        panel.appendChild(el('div', 'field-hint', '品牌（鼎兆元／墨竹亭／小辛辣，或留空）決定畫面主題：選到這家店時整個系統換成該品牌的顏色與 logo；選「全部門市」時用鼎兆元（至少一家門市有填品牌才套鼎兆元，否則用系統主色）；沒填品牌的門市用「系統設定」的主色。品牌色欄已停用——顏色依品牌自動套用。舊資料若不是這三個品牌，下拉會標「（無效，請改選）」，不改也能存檔。'))
+        panel.appendChild(el('div', 'field-hint', '類型（總部／門市／央廚）：儀表板「全部門市」的品牌篩選與各店比較用；名稱裡沒有品牌字樣時，畫面會自動在前面加上品牌。'))
         var wrap = el('div', 'table-wrap');
         var table = document.createElement('table');
         table.className = 'data-table';
@@ -10309,53 +10516,44 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
             activeTd.appendChild(activeInput);
             tr.appendChild(activeTd);
 
-            // store-theme：品牌色＝顏色選擇器＋文字框（兩邊同步；文字留空＝不設）。
+            // brand-three（2026-09-29）：品牌色欄改唯讀（資料欄保留相容舊表、存檔原樣帶回），
+            // 顯示目前品牌的主題色票＋「顏色依品牌自動套用」。
             var colorTd = document.createElement('td');
             var colorBox = el('div', 'brand-color-field');
-            var picker = document.createElement('input');
-            picker.type = 'color';
-            picker.className = 'brand-color-picker';
-            picker.id = 'storeColorPicker-' + r.store_id;
-            picker.setAttribute('aria-label', r.store_id + ' 品牌色選擇器');
-            var colorText = document.createElement('input');
-            colorText.type = 'text';
-            colorText.className = 'brand-color-text';
-            colorText.id = 'storeColorText-' + r.store_id;
-            colorText.placeholder = '#RRGGBB（留空＝用系統主色）';
-            colorText.setAttribute('aria-label', r.store_id + ' 品牌色');
-            colorText.maxLength = 7;
-            colorText.value = r.brand_color || '';
-            picker.value = HEX_RE.test(r.brand_color || '') ? r.brand_color.toLowerCase() : '#000000';
-            picker.classList.toggle('is-empty', !r.brand_color);
-            picker.addEventListener('input', function () {
-              r.brand_color = picker.value.toUpperCase();
-              colorText.value = r.brand_color;
-              picker.classList.remove('is-empty');
-            });
-            colorText.addEventListener('input', function () {
-              var v = colorText.value.trim();
-              r.brand_color = v;
-              if (HEX_RE.test(v)) picker.value = v.toLowerCase();
-              picker.classList.toggle('is-empty', !v);
-            });
-            colorBox.appendChild(picker);
-            colorBox.appendChild(colorText);
+            colorBox.id = 'storeColorAuto-' + r.store_id;
+            var swatch = el('span', 'brand-color-swatch');
+            var hintText = el('span', 'brand-color-auto', '顏色依品牌自動套用');
+            colorBox.appendChild(swatch);
+            colorBox.appendChild(hintText);
             colorTd.appendChild(colorBox);
             tr.appendChild(colorTd);
+            function paintSwatch() {
+              var bt = window.PnlTheme && window.PnlTheme.brandTheme ? window.PnlTheme.brandTheme(r.brand) : null;
+              swatch.style.background = bt ? bt.surface : 'transparent';
+              swatch.classList.toggle('is-empty', !bt);
+              swatch.title = bt ? r.brand : '系統主色';
+            }
+            paintSwatch();
 
-            // dashboard-redesign：品牌（文字＋建議清單）、類型（下拉）。
+            // brand-three：品牌改下拉（鼎兆元／墨竹亭／小辛辣／空白），避免打錯字；舊表
+            // 若存著其他文字，多列一個「（無效）」選項標出來，存檔前要改選。
             var brandTd = document.createElement('td');
-            var brandInput = document.createElement('input');
-            brandInput.type = 'text';
-            brandInput.className = 'store-brand-input';
-            brandInput.id = 'storeBrand-' + r.store_id;
-            brandInput.setAttribute('list', 'storeBrandOptions');
-            brandInput.setAttribute('aria-label', r.store_id + ' 品牌');
-            brandInput.maxLength = 20;
-            brandInput.placeholder = '例如 墨竹亭';
-            brandInput.value = r.brand || '';
-            brandInput.addEventListener('input', function () { r.brand = brandInput.value; });
-            brandTd.appendChild(brandInput);
+            var brandSelect = document.createElement('select');
+            brandSelect.className = 'store-brand-select';
+            brandSelect.id = 'storeBrand-' + r.store_id;
+            brandSelect.setAttribute('aria-label', r.store_id + ' 品牌');
+            var curBrand = String(r.brand || '').trim();
+            var brandOpts = [['', '（未設）']].concat(STORE_BRANDS.map(function (b) { return [b, b]; }));
+            if (curBrand && STORE_BRANDS.indexOf(curBrand) === -1) brandOpts.push([curBrand, curBrand + '（無效，請改選）']);
+            brandOpts.forEach(function (t) {
+              var o = document.createElement('option');
+              o.value = t[0];
+              o.textContent = t[1];
+              if (curBrand === t[0]) o.selected = true;
+              brandSelect.appendChild(o);
+            });
+            brandSelect.addEventListener('change', function () { r.brand = brandSelect.value; paintSwatch(); });
+            brandTd.appendChild(brandSelect);
             tr.appendChild(brandTd);
 
             var typeTd = document.createElement('td');
@@ -10414,22 +10612,27 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
             if (r.store_id === 'ALL') { errEl.textContent = 'store_id 不可為保留字 ALL'; return; }
             if (!r.name) { errEl.textContent = r.store_id + '：名稱必填'; return; }
             if (seen[r.store_id]) { errEl.textContent = 'store_id 重複：' + r.store_id; return; }
+            // brand-three：品牌色不再編輯，原樣帶回；舊表壞值清空（後端仍驗 #RRGGBB 或空）。
             r.brand_color = (r.brand_color || '').trim().toUpperCase();
-            if (r.brand_color && !HEX_RE.test(r.brand_color)) { errEl.textContent = r.store_id + '：品牌色格式須為 #RRGGBB（或留空）'; return; }
+            if (r.brand_color && !HEX_RE.test(r.brand_color)) r.brand_color = '';
             r.brand = (r.brand || '').trim();
-            if (r.brand.length > 20) { errEl.textContent = r.store_id + '：品牌最多 20 個字'; return; }
+            // Fable #61 中1：舊表存的自訂字（沒改動）只在下拉標「（無效，請改選）」、不擋存檔；
+            // 後端只驗有變動的列。新值只能從下拉選（三選一或空白）。
+            var origStore = (state.data.stores || []).filter(function (x) { return x.store_id === r.store_id; })[0];
+            var origBrand = origStore ? String(origStore.brand || '').trim() : '';
+            if (r.brand && STORE_BRANDS.indexOf(r.brand) === -1 && r.brand !== origBrand) { errEl.textContent = r.store_id + '：品牌須為 鼎兆元／墨竹亭／小辛辣（或留空）'; return; }
             r.unit_type = r.unit_type || '';
             if (['', '總部', '門市', '央廚'].indexOf(r.unit_type) === -1) { errEl.textContent = r.store_id + '：類型須為 總部／門市／央廚（或留空）'; return; }
             seen[r.store_id] = true;
           }
           var diff = computeDiff(function (r) { return r.store_id; }, state.data.stores, rows, function (r) {
-            return r.store_id + ' ' + r.name + '（' + (r.active ? '啟用' : '停用') + (r.brand_color ? '，品牌色 ' + r.brand_color : '') +
+            return r.store_id + ' ' + r.name + '（' + (r.active ? '啟用' : '停用') +
               (r.brand ? '，品牌 ' + r.brand : '') + (r.unit_type ? '，' + r.unit_type : '') + '）';
           });
           showDiffAndSave('門市', diff, [], function () {
             return saveTable_('stores', rows).then(function () {
               state.data.stores = clone(rows);
-              if (window.PnlTheme) window.PnlTheme.setStores(rows); // 即時套用新品牌色
+              if (window.PnlTheme) window.PnlTheme.setStores(rows); // 即時套用新品牌主題
               showToast('門市已存檔');
             });
           });
