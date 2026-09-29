@@ -2210,6 +2210,198 @@
     .mismatch-note { margin: -4px 0 6px; }
     .filters { margin-bottom: 8px; }
   }
+
+  /* ======================================================================
+     dashboard-redesign（2026-09-29）：六列項目卡＋每月走勢折線。
+     桌面：左 260px（標題／金額／佔營收／較上月），右邊圖；手機（<768）
+     縱向堆疊，圖吃滿卡片寬（JS 依容器寬度畫 svg，不靠縮放，375px 不溢出）。
+     ====================================================================== */
+  .metric-section { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+  .metric-filter-bar {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .metric-row {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 16px 18px;
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+    min-width: 0;
+  }
+  .metric-head { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .metric-title { font-size: 15px; font-weight: 700; color: var(--ink); }
+  .metric-value { white-space: nowrap; }
+  .metric-value-prefix { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+  .metric-value-num { font-size: 28px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .metric-pct { font-size: 13px; color: var(--ink-soft); }
+  .metric-delta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .metric-delta-label { font-size: 12px; color: var(--ink-soft); }
+  .metric-sub-rows { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--ink-soft); border-top: 1px solid var(--line); padding-top: 6px; }
+  .metric-sub-rows div { display: flex; justify-content: space-between; gap: 10px; }
+  .metric-chart-box { min-width: 0; }
+  .metric-chart-title { font-size: 12px; color: var(--ink-soft); margin-bottom: 4px; }
+  .metric-chart-wrap { position: relative; min-width: 0; }
+  .metric-chart { display: block; max-width: 100%; overflow: visible; touch-action: pan-y; }
+  .metric-chart:focus-visible { outline: 2px solid var(--brand-dark); outline-offset: 2px; border-radius: 4px; }
+  .metric-gridline { stroke: var(--line); stroke-width: 1; }
+  .metric-zeroline { stroke: #b9b2ad; stroke-width: 1; }
+  .metric-axis-label, .metric-x-label { font-size: 11px; fill: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .metric-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .metric-dot { stroke-width: 2; }
+  .metric-dot-hover { stroke: #ffffff; stroke-width: 2; }
+  .metric-crosshair { stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 2 3; pointer-events: none; }
+  .metric-hit { cursor: crosshair; }
+  .metric-chart-empty {
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-soft);
+    font-size: 13px;
+    background: var(--bg);
+    border-radius: 8px;
+  }
+  .metric-tooltip {
+    position: absolute;
+    z-index: 5;
+    background: #ffffff;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(35, 24, 21, 0.14);
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--ink);
+    pointer-events: none;
+    max-width: 240px;
+  }
+  .metric-tooltip[hidden] { display: none; }
+  .metric-tooltip-title { font-weight: 700; margin-bottom: 4px; color: var(--ink-soft); }
+  .metric-tooltip-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; line-height: 1.6; }
+  .metric-tooltip-value { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric-tooltip-name { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; }
+  .metric-key { display: inline-block; width: 16px; height: 0; border-top: 3px solid currentColor; border-radius: 2px; flex: 0 0 auto; }
+  .metric-footnote { font-size: 12px; color: var(--ink-soft); }
+  .series-legend { display: flex; flex-wrap: wrap; gap: 6px; }
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 13px;
+    min-height: var(--tap-min);
+    cursor: pointer;
+  }
+  .legend-item[aria-pressed="false"] { color: var(--ink-soft); text-decoration: line-through; background: var(--bg); }
+  .legend-item[aria-pressed="false"] .metric-key { opacity: 0.35; }
+
+  @media (max-width: 767px) {
+    .metric-row { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 12px; }
+    .metric-value { white-space: normal; overflow-wrap: anywhere; }
+    .metric-value-num { font-size: clamp(20px, 6.4vw, 26px); }
+    .metric-head { gap: 4px; }
+    .metric-filter-bar { padding: 10px; }
+    .brand-filter { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .series-legend { max-height: 132px; overflow-y: auto; }
+    .legend-item { padding: 4px 10px; font-size: 12px; }
+  }
+
+  .group-units-box { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+  .store-brand-input { min-width: 96px; }
+
+  /* ---- entry-menu（2026-09-29）：「填資料」展開式子選單＋讀取中遮罩 ---- */
+  .tab-group { display: flex; flex-direction: column; gap: 2px; }
+  /* 展開箭頭用 CSS 畫（不進 textContent，頁籤文字仍是「填資料」） */
+  .tab-btn-parent::after { content: '▸'; margin-left: auto; font-size: 12px; opacity: 0.8; }
+  .tab-btn-parent[aria-expanded="true"]::after { content: '▾'; }
+  .tab-submenu { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 4px 30px; }
+  .tab-submenu.hidden { display: none; }
+  .tab-subbtn {
+    border: none;
+    background: transparent;
+    color: var(--nav-ink);
+    text-align: left;
+    border-radius: 999px;
+    padding: 0 14px;
+    min-height: var(--tap-min);
+    font-size: 14px;
+    white-space: nowrap;
+  }
+  .tab-subbtn:hover { color: #fff; }
+  .tab-subbtn[aria-current="page"] { background: rgba(255, 255, 255, 0.16); color: #fff; font-weight: 700; }
+
+  .entry-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .entry-cat-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .entry-cat-empty { margin-bottom: 10px; }
+
+  /* Fable #60 中1：只蓋主內容區——頂列（登出）、側邊欄、手機底部導覽仍可點；
+     z-index 低於確認視窗／toast（50）、抽屜（60）。 */
+  .loading-overlay {
+    position: fixed;
+    top: var(--topbar-h);
+    left: var(--sidebar-w);
+    right: 0;
+    bottom: 0;
+    z-index: 45;
+    background: rgba(35, 24, 21, 0.28);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: progress;
+  }
+  .loading-overlay.hidden { display: none; }
+  .loading-overlay-box {
+    background: #fff;
+    border-radius: var(--radius);
+    box-shadow: 0 6px 24px rgba(35, 24, 21, 0.18);
+    padding: 16px 22px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .loading-spinner {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 3px solid var(--line);
+    border-top-color: var(--brand-dark);
+    animation: pnl-spin 0.8s linear infinite;
+  }
+  @keyframes pnl-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .loading-spinner { animation: none; } }
+  .loading-overlay-box .btn-retry { margin-left: 6px; }
+  @media (max-width: 767px) {
+    .loading-overlay { left: 0; bottom: calc(var(--bottomnav-h, 56px) + env(safe-area-inset-bottom)); }
+    /* Fable #60 輕2：5 顆類別膠囊在 375px 換行、全部看得到（不靠橫向捲動）。 */
+    .entry-cat-pills { flex-wrap: wrap; max-width: 100%; }
+    .entry-toolbar { flex-direction: column; align-items: stretch; }
+  }
+  /* Fable #59：選填狀態、全部門市待補清單逐店折疊、圖例「顯示全部」 */
+  .status-pill.status-optional { background: var(--bg); color: var(--ink-soft); border: 1px dashed var(--line); }
+  .pending-store { border-bottom: 1px solid var(--line); }
+  .pending-store:last-child { border-bottom: none; }
+  .pending-store > summary { cursor: pointer; min-height: var(--tap-min); display: flex; align-items: center; gap: 6px; list-style: none; }
+  .pending-store > summary::-webkit-details-marker { display: none; }
+  .pending-store > summary::before { content: '▸'; font-size: 12px; color: var(--ink-soft); width: 12px; }
+  .pending-store[open] > summary::before { content: '▾'; }
+  .pending-store-body { padding: 0 0 8px 12px; }
+  .legend-toggle-all { align-self: flex-start; }
+  .account-optional-badge { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #eceae8; color: var(--ink-soft); }
 </style>
 
 </head>
@@ -3204,8 +3396,10 @@
     opts = opts || {};
     var accountName = opts.accountName || function (id) { return id; };
     var storeName = opts.storeName || function (id) { return id; };
+    // Fable 審查 #59 輕4：門市欄維持原名，品牌另起一欄（放最後，既有欄位順序不變）。
+    var storeBrand = opts.storeBrand || function () { return ''; };
 
-    var rows = [['門市', '月份', 'acc_id', '科目', '金額', '分攤月數', '認列金額', '來源', '備註', '建立者', '建立時間', '作廢', '狀態']];
+    var rows = [['門市', '月份', 'acc_id', '科目', '金額', '分攤月數', '認列金額', '來源', '備註', '建立者', '建立時間', '作廢', '狀態', '品牌']];
 
     (entries || []).forEach(function (e) {
       var amountRaw = toFiniteOrNaN(e.amount);
@@ -3220,7 +3414,7 @@
         textCell(storeName(e.store_id)), textCell(e.month), textCell(e.acc_id), textCell(accountName(e.acc_id)),
         amountCell, numCell(splitMonths, 0), recognizedCell,
         textCell(e.source), textCell(e.note), textCell(e.created_by), textCell(e.created_at),
-        textCell(e.void === true ? '是' : '否'), textCell(statusText)
+        textCell(e.void === true ? '是' : '否'), textCell(statusText), textCell(storeBrand(e.store_id))
       ]);
     });
 
@@ -4310,6 +4504,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     // ---- C6 error 碼 → 中文訊息（server 若有帶 message 優先用 server 的） ----
     var ERROR_MESSAGES = {
       AUTH: '通行碼錯誤或登入已過期，請重新登入',
+      TIMEOUT: '連線逾時，請按重試',
       FORBIDDEN: '沒有權限查看',
       LOCKED: '該月份已定稿鎖定',
       PENDING: '有科目尚未填寫',
@@ -4422,7 +4617,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     //   後再清一次（不論成功失敗——失敗也可能已部分寫入），寫入後不會再看到
     //   舊數字。新增寫入 action 不用記得來這裡登記，預設就是「會清」。
     // - 最多留 DASH_CACHE_MAX 組（依最後使用時間淘汰），避免長時間開著無限長大。
-    var READ_ONLY_ACTIONS = { getMonth: 1, getTrend: 1, getSettings: 1, listInvites: 1, exportEntries: 1, getAttachment: 1 };
+    var READ_ONLY_ACTIONS = { getMonth: 1, getTrend: 1, getTrendMulti: 1, getSettings: 1, listInvites: 1, exportEntries: 1, getAttachment: 1 };
     var DASH_CACHE_MAX = 24;
     var dashCache = { owner: null, map: {}, order: [] };
     function dashCacheCheckOwner_() {
@@ -4456,11 +4651,66 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       size: function () { dashCacheCheckOwner_(); return dashCache.order.length; },
       generation: 0
     };
+    // ---- entry-menu（2026-09-29）：讀取中遮罩 ----
+    // 各分頁「沒有快取可立即顯示」的讀取（首次進頁、切門市／月份…）呼叫
+    // PnlLoading.show() 拿一個 token，完成或失敗時 hide(token)；有快取時不
+    // 呼叫（沿用 PR #53：先顯示快取、右上「更新中…」）。遮罩整頁灰底、畫面
+    // 中央「讀取中⋯⋯」、role=status＋#main aria-busy，螢幕閱讀器讀得到。
+    // 換頁（renderActiveTab）與登出時 reset()，舊頁面晚到的 hide 不影響新頁面。
+    var loadingTokens = [];
+    var loadingSeq = 0;
+    function syncLoadingOverlay_() {
+      var ov = document.getElementById('loadingOverlay');
+      var main = document.getElementById('main');
+      var on = loadingTokens.length > 0;
+      if (ov) ov.classList.toggle('hidden', !on);
+      if (main) {
+        if (on) main.setAttribute('aria-busy', 'true');
+        else main.removeAttribute('aria-busy');
+      }
+      document.body.classList.toggle('is-loading', on);
+    }
+    // Fable #60 中1：看門狗——一個讀取超過 LOADING_WATCHDOG_MS 還沒回來就自動
+    // 解除遮罩（不讓畫面永遠鎖死），呼叫端有給 onTimeout 就交給它顯示重試；
+    // 沒給就用 toast 提醒。
+    var LOADING_WATCHDOG_MS = 25000;
+    var loadingTimers = {};
+    window.PnlLoading = {
+      show: function (onTimeout) {
+        var t = ++loadingSeq;
+        loadingTokens.push(t);
+        syncLoadingOverlay_();
+        var ms = typeof window.__PNL_LOADING_WATCHDOG_MS === 'number' ? window.__PNL_LOADING_WATCHDOG_MS : LOADING_WATCHDOG_MS;
+        loadingTimers[t] = setTimeout(function () {
+          delete loadingTimers[t];
+          if (loadingTokens.indexOf(t) === -1) return;
+          loadingTokens = loadingTokens.filter(function (x) { return x !== t; });
+          syncLoadingOverlay_();
+          if (typeof onTimeout === 'function') onTimeout();
+          else if (typeof showToast === 'function') showToast('讀取太久，已先解除畫面鎖定，請稍後重試');
+        }, ms);
+        return t;
+      },
+      hide: function (t) {
+        if (loadingTimers[t]) { clearTimeout(loadingTimers[t]); delete loadingTimers[t]; }
+        loadingTokens = loadingTokens.filter(function (x) { return x !== t; });
+        syncLoadingOverlay_();
+      },
+      reset: function () {
+        Object.keys(loadingTimers).forEach(function (k) { clearTimeout(loadingTimers[k]); });
+        loadingTimers = {};
+        loadingTokens = [];
+        syncLoadingOverlay_();
+      },
+      active: function () { return loadingTokens.length > 0; }
+    };
+
     function invalidateDashCache_() {
       window.PnlDashCache.clear();
       window.PnlDashCache.generation++;
     }
 
+    var CALL_TIMEOUT_MS = 60000;
     // opts.background：預取用——不觸發 1.5 秒慢速進度條（使用者沒在等它）。
     function call(action, req, opts) {
       opts = opts || {};
@@ -4500,10 +4750,30 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       } catch (syncErr) {
         promise = Promise.reject(syncErr);
       }
-      return promise.then(
-        function (data) { settle(); return data; },
+      // Fable #60 中1：call() 逾時（預設 60 秒）轉成可重試的 TIMEOUT 錯誤，
+      // 不讓畫面永遠等下去。寫入逾時時後端可能其實已經寫進去了，訊息請使用
+      // 者先重新整理確認，不要直接再送一次。晚到的回應一律丟掉。
+      var timeoutMs = typeof window.__PNL_CALL_TIMEOUT_MS === 'number' ? window.__PNL_CALL_TIMEOUT_MS : CALL_TIMEOUT_MS;
+      var timeoutTimer = null;
+      var timeoutPromise = new Promise(function (_, reject) {
+        timeoutTimer = setTimeout(function () {
+          reject({
+            error: 'TIMEOUT',
+            message: isWrite ? '連線逾時：這筆可能已經送出，請先重新整理確認，再決定要不要重送' : '連線逾時，請按重試'
+          });
+        }, timeoutMs);
+      });
+      var settled = false;
+      var settleOnce = function () {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutTimer);
+        settle();
+      };
+      return Promise.race([promise, timeoutPromise]).then(
+        function (data) { settleOnce(); return data; },
         function (err) {
-          settle();
+          settleOnce();
           if (err && typeof err === 'object') {
             try { Object.defineProperty(err, '__sentToken', { value: sentToken, enumerable: false, configurable: true }); } catch (e) { /* 凍結物件就算了 */ }
           }
@@ -4705,6 +4975,18 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       App.system = Object.assign({}, App.system || {}, { 主色: initialBrandColor() });
       setBrandColor_(initialBrandColor(), 'initial');
     }
+    // dashboard-redesign（2026-09-29）：門市顯示名稱＝有品牌、而且名稱裡還
+    // 沒有品牌字樣時，前面加品牌（例如 S01「新竹光復」＋品牌「小辛辣」→
+    // 「小辛辣 新竹光復」，才分得出墨竹亭那家「新竹光復」）。分頁裡的名稱
+    // 不改，只影響畫面顯示。
+    window.PnlStoreLabel = function (store) {
+      if (!store) return '';
+      var name = String(store.name || '').trim() || String(store.store_id || '');
+      var brand = String(store.brand || '').trim();
+      if (brand && name.indexOf(brand) === -1) return brand + ' ' + name;
+      return name;
+    };
+
     window.PnlTheme = {
       setStores: setThemeStores,
       setStore: setThemeStore,
@@ -4773,6 +5055,13 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       storageRemove(TOKEN_KEY);
       storageRemove(SESSION_KEY);
       document.body.classList.remove('has-bottom-nav'); // 登出時清掉，避免殘留影響登入畫面
+      if (window.PnlLoading) window.PnlLoading.reset();
+      App.entryCategory = null;
+      App.entryLastStore = null;
+      App.entryLastMonth = null;
+      App.dashBrandFilter = null; // Fable #59 輕6：儀表板品牌篩選／圖例是記憶體狀態，登出清掉
+      App.dashHiddenSeries = null;
+      App.dashLegendTouched = false;
       App.token = null;
       App.name = '';
       App.role = '';
@@ -4955,6 +5244,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         '    <div class="content-wrap">' +
         '      <div class="breadcrumb-bar" id="breadcrumbBar"></div>' +
         '      <div class="main" id="main"></div>' +
+        // entry-menu：讀取中遮罩（沒有快取可立即顯示時整頁灰底鎖定），見 window.PnlLoading。
+        '      <div class="loading-overlay hidden" id="loadingOverlay" role="status" aria-live="polite">' +
+        '        <div class="loading-overlay-box"><span class="loading-spinner" aria-hidden="true"></span><span id="loadingOverlayText">讀取中⋯⋯</span></div>' +
+        '      </div>' +
         '    </div>' +
         '  </div>' +
         '  <nav class="bottom-nav" id="bottomNav" aria-label="底部導覽" role="tablist"></nav>' +
@@ -5367,6 +5660,39 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       closeSidebar(); // 手機版：點頁籤後自動收起抽屜
     }
 
+    // ---- entry-menu（2026-09-29）：「填資料」展開式子選單 ----
+    // 依序：食材費用（食材＋包材）、人事費用、可控費用、不可控費用（含營業稅、
+    // 營業外收入）；最後多一項「營業收入」（總部／央廚手填收入 A098 等營收
+    // 區塊的手動科目要有入口，放最後不打亂 Eason 指定的四項順序）。
+    // 點子選單＝切到填資料頁並只列該類科目（App.entryCategory）。
+    var ENTRY_CATEGORIES = [
+      { key: 'food', label: '食材費用', blocks: ['食材', '包材'] },
+      { key: 'labor', label: '人事費用', blocks: ['人事'] },
+      { key: 'controllable', label: '可控費用', blocks: ['可控'] },
+      { key: 'uncontrollable', label: '不可控費用', blocks: ['不可控', '營業稅', '營業外收入'] },
+      { key: 'revenue', label: '營業收入', blocks: ['營收'] }
+    ];
+    window.PnlEntryCategories = ENTRY_CATEGORIES;
+    var entryMenuOpen = false;
+    function selectEntryCategory(key) {
+      App.entryCategory = key;
+      entryMenuOpen = true;
+      // 已經在填資料頁：只換類別（頁面自己重畫，保留門市／月份與已載入的資料）。
+      if (activeTabId === 'entry' && typeof window.__pnlEntryOnCategory === 'function') {
+        renderTabbar();
+        window.__pnlEntryOnCategory();
+        closeSidebar();
+        return;
+      }
+      selectTab('entry');
+    }
+    window.PnlSelectEntryCategory = selectEntryCategory;
+    // 填資料頁內的類別膠囊切換時同步側邊欄子選單的 aria-current（不重畫頁面）。
+    window.PnlSetEntryCategory = function (key) {
+      App.entryCategory = key;
+      renderTabbar();
+    };
+
     function renderTabbar() {
       var bar = document.getElementById('tabbar');
       var tabs = visibleTabs();
@@ -5377,6 +5703,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       }
       bar.classList.remove('hidden');
       tabs.forEach(function (t) {
+        if (t.id === 'entry') {
+          renderEntryMenu_(bar, t);
+          return;
+        }
         var btn = document.createElement('button');
         btn.className = 'tab-btn';
         btn.type = 'button';
@@ -5390,6 +5720,56 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         btn.addEventListener('click', function () { selectTab(t.id); });
         bar.appendChild(btn);
       });
+    }
+
+    // 「填資料」父項：點一下展開／收合子選單；目前不在填資料頁時同時切過去
+    // （沿用上次的類別，沒選過＝食材費用），所以原本「點填資料就到填資料頁」
+    // 的習慣不變。子選單項目各有 id（entrySub-<key>），aria-current 標目前類別。
+    function renderEntryMenu_(bar, t) {
+      var wrap = document.createElement('div');
+      wrap.className = 'tab-group';
+      var btn = document.createElement('button');
+      btn.className = 'tab-btn tab-btn-parent';
+      btn.type = 'button';
+      btn.id = 'entryMenuToggle';
+      btn.setAttribute('role', 'tab');
+      btn.setAttribute('aria-selected', String(activeTabId === 'entry'));
+      btn.setAttribute('aria-expanded', String(entryMenuOpen));
+      btn.setAttribute('aria-controls', 'entrySubmenu');
+      var iconFn = TAB_ICON[t.id];
+      if (iconFn) btn.appendChild(iconFn());
+      var labelSpan = document.createElement('span');
+      labelSpan.textContent = t.label;
+      btn.appendChild(labelSpan);
+      btn.addEventListener('click', function () {
+        if (activeTabId !== 'entry') {
+          entryMenuOpen = true;
+          selectTab('entry');
+          return;
+        }
+        entryMenuOpen = !entryMenuOpen;
+        renderTabbar();
+      });
+      wrap.appendChild(btn);
+
+      var sub = document.createElement('div');
+      sub.className = 'tab-submenu' + (entryMenuOpen ? '' : ' hidden');
+      sub.id = 'entrySubmenu';
+      sub.setAttribute('role', 'group');
+      sub.setAttribute('aria-label', '填資料類別');
+      var current = App.entryCategory || ENTRY_CATEGORIES[0].key;
+      ENTRY_CATEGORIES.forEach(function (c) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'tab-subbtn';
+        b.id = 'entrySub-' + c.key;
+        b.textContent = c.label;
+        if (activeTabId === 'entry' && c.key === current) b.setAttribute('aria-current', 'page');
+        b.addEventListener('click', function () { selectEntryCategory(c.key); });
+        sub.appendChild(b);
+      });
+      wrap.appendChild(sub);
+      bar.appendChild(wrap);
     }
 
     // v3：手機底部固定導覽列（<768px，見 css.html .bottom-nav）。跟側邊欄
@@ -5449,6 +5829,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       main.innerHTML = '';
       var tab = visibleTabs().filter(function (t) { return t.id === activeTabId; })[0] || TABS[0];
       updateBreadcrumb();
+      // 每次換頁都遞增：頁面裡還在等的非同步載入（例如設定頁的 getSettings）
+      // 回來時比對這個序號，已經換頁就不要再把舊頁面畫回 #main 蓋掉新頁面。
+      main.__pnlRenderSeq = (main.__pnlRenderSeq || 0) + 1;
+      if (window.PnlLoading) window.PnlLoading.reset(); // 上一頁還沒回來的讀取不再鎖畫面
       tab.render(main);
     }
 
@@ -5549,14 +5933,12 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
    * 唯一出現的 `.innerHTML =` 賦值都是**純靜態字串**（不含任何變數插值），
    * 用來一次性鋪版面骨架；test/ui/xss.test.js 會掃這個假設有沒有被破壞。
    *
-   * UI v2（2026-09-26，AdminAge 風格）：頂排 4 張 KPI 卡（營業額／食材成本
-   * （含包材）／人事／稅後淨利，各配上月漲跌徽章＋12 個月小面積折線＋
-   * 圖示方塊）、中排左「近 12 個月四大費用」堆疊長條／右「營業額與稅後
-   * 淨利率」面積折線、其後新增「科目明細」表格卡，其餘（待補清單／連接器
-   * 帶入／errors／mismatch note）維持原本的資訊與規則，只是重新排版。
-   * 舊版 .hero-card／.profit-row 兩欄（營業額／營業淨利／稅後淨利）現在
-   * 拆成：營業額＋稅後淨利進頂排 KPI，營業淨利併進下面的 3 張
-   * expense-card（可控／不可控／營業淨利）——文字內容（"NT$ "+整數）逐字
+   * dashboard-redesign（2026-09-29，Eason）：頂部改成「一個項目一列」六張
+   * 卡（營業額／稅後淨利／食材費用（食材＋包材）／人事／可控／不可控），每
+   * 列左邊本月金額、佔營收%、較上月，右邊近 12 個月「每月走勢」折線（手寫
+   * inline SVG，無外部圖表庫）。單店一條線；「全部門市」同圖各店各一條線，
+   * 資料來自 getTrendMulti（一次取多店），可依品牌篩選、點圖例隱藏。科目
+   * 明細表／連接器帶入／待補清單沿用。文案「NT$ ＋整數」「佔營收 X%」逐字
    * 保留，e2e 的獨立試算比對字串照舊找得到。
    */
 (function () {
@@ -5574,7 +5956,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     BAD_SPLIT: '分攤月數格式錯，已當 1 個月處理'
   };
 
-  var STATUS_LABEL = { filled: '已填', pending: '待補', connector: '連接器', zero: '確認為0', manual: '手動', estimated: '估算', estimated_overlay: '含估算' };
+  var STATUS_LABEL = { optional: '選填', filled: '已填', pending: '待補', connector: '連接器', zero: '確認為0', manual: '手動', estimated: '估算', estimated_overlay: '含估算' };
 
   // ---- 小工具：建 DOM 節點（textContent，不碰 innerHTML）----
   function el(tag, className, text) {
@@ -5741,15 +6123,6 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
 
   var MISMATCH_INFO = { dir: 'flat', arrow: '—', full: '— 店家組成不同', short: '—', mismatch: true };
 
-  function deltaEl(cur, prevVal) {
-    var info = deltaInfo(cur, prevVal);
-    return el('div', 'delta ' + info.dir, info.full);
-  }
-
-  function mismatchDeltaEl() {
-    return el('div', 'delta flat', MISMATCH_INFO.full);
-  }
-
   // ---- UI v2 第二輪：KPI 卡左上角圓形箭頭徽章＋百分比（item 1）----
   // 「店家組成不同」時徽章仍佔同一格位置：圓圈顯示灰色「—」，旁邊一行
   // 小字註明原因，不取代整個徽章區（不是把徽章整組換成一句 mismatch-note）。
@@ -5772,26 +6145,12 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     return row;
   }
 
-  // ---- 共用：正規化定義域（供大趨勢圖與 KPI 小面積圖共用）----
-  // forceZeroMin：營收這類不會是負數的指標從 0 起算，圖形高度才代表真實
-  // 比例；稅後淨利率／淨利這類可能是負的維持自動抓 min/max。
-  function domainOf(vals, valid, forceZeroMin) {
-    var validVals = vals.filter(function (v, i) { return valid[i]; });
-    if (validVals.length === 0) return { min: 0, max: 1 };
-    var max = Math.max.apply(null, validVals);
-    if (forceZeroMin) {
-      var min = 0;
-      if (max <= 0) max = 1; // 全部是 0（或負數，理論上不會）時避免除以 0
-      return { min: min, max: max };
-    }
-    var min2 = Math.min.apply(null, validVals);
-    if (min2 === max) { min2 -= Math.abs(min2) * 0.1 || 1; max += Math.abs(max) * 0.1 || 1; }
-    return { min: min2, max: max };
-  }
-
-  // ---- SVG 折線趨勢：營收（左軸，紅，面積折線）＋稅後淨利率 %（右軸，藍虛線）----
+  // ---- 月份有沒有資料（status≠無）／預設月判準 ----
   function monthHasData(row, isAllView) {
     if (!row || row.status === undefined) return true; // 沒有 status 欄位（不該發生，防呆當作有資料）
+    // Fable #59 中2：月份列存在但沒有任何有效明細（has_entries=false）＝沒資料，
+    // 走勢斷線、不畫成 0。舊後端沒有這個欄位時維持只看 status。
+    if (row.has_entries === false) return false;
     if (isAllView) {
       if (!row.status || typeof row.status !== 'object') return true;
       var keys = Object.keys(row.status);
@@ -5813,400 +6172,362 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     return hasRevenue || row.status === '定稿';
   }
 
-  // ---- 第三輪 item 1／5：把「只有 N 個月有資料」時要不要壓縮 x 軸的規則
-  // 統一成一支共用函式——bar/trend 兩張大圖用 threshold=6（少於 6 個月才
-  // 壓縮，維持原本 12 欄格局的月份感），KPI 迷你折線用 threshold=Infinity
-  // （只要有資料就一律只鋪有資料的月份，不留 12 欄空位）。回傳
-  // {rows, valid}：valid 壓縮後永遠全部是 true（因為已經濾掉沒資料的），
-  // 呼叫端不用再另外判斷。 ----
-  function compactToValidRows(allRows, isAllView, threshold) {
-    var validAll = allRows.map(function (r) { return monthHasData(r, isAllView); });
-    var validCount = validAll.filter(Boolean).length;
-    if (!(validCount > 0 && validCount < threshold)) {
-      return { rows: allRows, valid: validAll, validCount: validCount };
-    }
-    var rows = allRows.filter(function (r, i) { return validAll[i]; });
-    return { rows: rows, valid: rows.map(function () { return true; }), validCount: validCount };
-  }
+  // ======================================================================
+  // dashboard-redesign（2026-09-29，Eason）：儀表板改成「一個項目一列」——
+  // 營業額、稅後淨利、食材費用（食材＋包材）、人事、可控、不可控，每列左邊
+  // 本月金額／佔營收%／較上月，右邊「每月走勢」折線（近 12 個月、有資料才畫）。
+  // 單店＝一條線；「全部門市」＝同一張圖各店各一條線（品牌篩選＋可點圖例隱藏）。
+  // 圖表規則照 dataviz skill：一個 y 軸、2px 線、類別色固定順序（色隨門市不隨
+  // 排名）、≥2 條線一定有圖例、滑過顯示十字線＋提示框、文字一律 textContent。
+  // 估算／月中累計的點畫成空心點＋虛線連過去（沿用既有「估」標示語意）。
+  // ======================================================================
 
-  function buildTrendSvg(allRows, isAllView) {
-    var compact = compactToValidRows(allRows, isAllView, 6); // item 1：少於 6 個月只鋪有資料的月份
-    var rows = compact.rows;
-    var W = 640, H = 380, padL = 50, padR = 50, padT = 18, padB = 34; // item 5：放大到與模板相當
-    var innerW = W - padL - padR, innerH = H - padT - padB;
-    var n = rows.length;
-    var stepX = n > 1 ? innerW / (n - 1) : 0;
-
-    var valid = compact.valid;
-    var revenues = rows.map(function (r) { return safeNum(r.blocks && r.blocks['營收']); });
-    var margins = rows.map(function (r) {
-      var rev = safeNum(r.blocks && r.blocks['營收']);
-      if (rev === 0) return 0;
-      return (safeNum(r.net_profit) / rev) * 100;
-    });
-
-    var revDomain = domainOf(revenues, valid, true);
-    var marginDomain = domainOf(margins, valid, false);
-
-    function yFor(v, dom) {
-      var frac = (v - dom.min) / (dom.max - dom.min);
-      return padT + (1 - frac) * innerH;
-    }
-    function xFor(i) { return padL + i * stepX; }
-
-    var svg = svgEl('svg');
-    svg.setAttribute('class', 'trend-svg');
-    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-    svg.setAttribute('role', 'img');
-    svg.setAttribute('aria-label', '近 12 個月營收與稅後淨利率趨勢');
-
-    [0, 0.5, 1].forEach(function (f) {
-      var val = revDomain.min + f * (revDomain.max - revDomain.min);
-      var y = padT + (1 - f) * innerH;
-      var line = svgEl('line');
-      line.setAttribute('class', 'trend-gridline');
-      line.setAttribute('x1', padL); line.setAttribute('x2', W - padR);
-      line.setAttribute('y1', y.toFixed(1)); line.setAttribute('y2', y.toFixed(1));
-      svg.appendChild(line);
-      var label = svgEl('text');
-      label.setAttribute('class', 'trend-axis-label');
-      label.setAttribute('x', padL - 6);
-      label.setAttribute('y', (y + 3).toFixed(1));
-      label.setAttribute('text-anchor', 'end');
-      label.textContent = fmtInt(val);
-      svg.appendChild(label);
-    });
-
-    [0, 0.5, 1].forEach(function (f) {
-      var val = marginDomain.min + f * (marginDomain.max - marginDomain.min);
-      var y = padT + (1 - f) * innerH;
-      var label = svgEl('text');
-      label.setAttribute('class', 'trend-axis-label');
-      label.setAttribute('x', W - padR + 6);
-      label.setAttribute('y', (y + 3).toFixed(1));
-      label.setAttribute('text-anchor', 'start');
-      label.textContent = val.toFixed(1) + '%';
-      svg.appendChild(label);
-    });
-
-    var revTitle = svgEl('text');
-    revTitle.setAttribute('class', 'trend-axis-label');
-    revTitle.setAttribute('x', padL); revTitle.setAttribute('y', 10);
-    revTitle.setAttribute('fill', 'var(--brand)'); // item 3（Fable 審查第三輪）：圖表線色/圖例改回 --brand（不是 --brand-dark），軸線／格線各自獨立用 --line（固定淺灰，不受品牌色影響，見 css.html .trend-gridline），主色設成黑色時線條跟格線也不會疊在一起分不清。
-    revTitle.textContent = '營收（左軸）';
-    svg.appendChild(revTitle);
-
-    var marginTitle = svgEl('text');
-    marginTitle.setAttribute('class', 'trend-axis-label');
-    marginTitle.setAttribute('x', W - padR); marginTitle.setAttribute('y', 10);
-    marginTitle.setAttribute('text-anchor', 'end');
-    marginTitle.setAttribute('fill', '#2f6fb0');
-    marginTitle.textContent = '稅後淨利率（右軸）';
-    svg.appendChild(marginTitle);
-
-    // UI v2：營收畫成「面積折線」——每段連續有資料的區間，底下疊一塊半透明
-    // 色塊（品牌色，低透明度）；淨利率維持純線（兩條都填色會互相蓋住）。
-    function segments() {
-      var segs = [];
-      var segStart = null;
-      for (var i = 0; i <= n; i++) {
-        var ok = i < n && valid[i];
-        if (ok && segStart === null) segStart = i;
-        if ((!ok || i === n) && segStart !== null) {
-          var segEnd = i - 1;
-          if (segEnd > segStart) segs.push([segStart, segEnd]);
-          segStart = null;
-        }
-      }
-      return segs;
-    }
-
-    segments().forEach(function (seg) {
-      var baseY = yFor(revDomain.min, revDomain);
-      var d = 'M ' + xFor(seg[0]).toFixed(1) + ',' + baseY.toFixed(1);
-      for (var j = seg[0]; j <= seg[1]; j++) {
-        d += ' L ' + xFor(j).toFixed(1) + ',' + yFor(revenues[j], revDomain).toFixed(1);
-      }
-      d += ' L ' + xFor(seg[1]).toFixed(1) + ',' + baseY.toFixed(1) + ' Z';
-      var area = svgEl('path');
-      area.setAttribute('d', d);
-      area.setAttribute('fill', 'var(--brand)');
-      area.setAttribute('fill-opacity', '0.12');
-      area.setAttribute('stroke', 'none');
-      svg.appendChild(area);
-    });
-
-    function drawSeries(vals, dom, color, dashed, dotRadius) {
-      var segStart = null;
-      for (var i = 0; i <= n; i++) {
-        var ok = i < n && valid[i];
-        if (ok && segStart === null) segStart = i;
-        if ((!ok || i === n) && segStart !== null) {
-          var segEnd = i - 1;
-          if (segEnd > segStart) {
-            var pts = [];
-            for (var j = segStart; j <= segEnd; j++) {
-              pts.push(xFor(j).toFixed(1) + ',' + yFor(vals[j], dom).toFixed(1));
-            }
-            var poly = svgEl('polyline');
-            poly.setAttribute('points', pts.join(' '));
-            poly.setAttribute('fill', 'none');
-            poly.setAttribute('stroke', color);
-            poly.setAttribute('stroke-width', '2.5');
-            poly.setAttribute('stroke-linejoin', 'round');
-            poly.setAttribute('stroke-linecap', 'round');
-            if (dashed) poly.setAttribute('stroke-dasharray', '4 3');
-            svg.appendChild(poly);
-          }
-          segStart = null;
-        }
-      }
-      for (var k = 0; k < n; k++) {
-        if (!valid[k]) continue;
-        var dot = svgEl('circle');
-        dot.setAttribute('cx', xFor(k).toFixed(1));
-        dot.setAttribute('cy', yFor(vals[k], dom).toFixed(1));
-        dot.setAttribute('r', String(dotRadius));
-        dot.setAttribute('fill', color);
-        svg.appendChild(dot);
-      }
-    }
-
-    drawSeries(revenues, revDomain, 'var(--brand)', false, 4);
-    drawSeries(margins, marginDomain, '#2f6fb0', true, 2);
-
-    rows.forEach(function (r, i) {
-      if (i === 0 || i === n - 1 || i % 3 === 0) {
-        var label = svgEl('text');
-        label.setAttribute('class', 'trend-x-label');
-        label.setAttribute('x', xFor(i).toFixed(1));
-        label.setAttribute('y', H - 6);
-        label.setAttribute('text-anchor', 'middle');
-        label.textContent = r.month.slice(2, 4) + '/' + r.month.slice(5, 7);
-        svg.appendChild(label);
-      }
-    });
-
-    return svg;
-  }
-
-  // ---- 第三輪 item 1：KPI 卡的迷你面積折線（無座標軸，單一指標）----
-  // x 軸只鋪「有資料的月份」、均分整個寬度（不留沒資料月份的空白），用
-  // compactToValidRows(threshold=Infinity) 一律壓縮。少於 2 個有資料的
-  // 月份畫不出一條有意義的線（0 個沒東西可畫、1 個只有一個點沒有斜率），
-  // 改回傳淡灰色「資料累積中」提示，佔同樣高度維持卡片版面一致。
-  function buildSparklineSvg(allRows, valueFn, isAllView, forceZeroMin, color) {
-    var compact = compactToValidRows(allRows, isAllView, Infinity);
-    var rows = compact.rows;
-
-    if (compact.validCount < 2) {
-      return el('div', 'kpi-sparkline-empty', '資料累積中');
-    }
-
-    var W = 220, H = 56, pad = 3;
-    var innerW = W - pad * 2, innerH = H - pad * 2;
-    var n = rows.length;
-    var stepX = n > 1 ? innerW / (n - 1) : 0;
-    var vals = rows.map(function (r) { return safeNum(valueFn(r)); });
-    var valid = compact.valid;
-    var dom = domainOf(vals, valid, forceZeroMin);
-
-    function yFor(v) {
-      var frac = (v - dom.min) / (dom.max - dom.min);
-      return pad + (1 - frac) * innerH;
-    }
-    function xFor(i) { return pad + i * stepX; }
-
-    var svg = svgEl('svg');
-    svg.setAttribute('class', 'kpi-sparkline');
-    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-    svg.setAttribute('preserveAspectRatio', 'none');
-    svg.setAttribute('aria-hidden', 'true');
-
-    // 已經壓縮成「全部都是有資料的月份」，這裡一定是連續一整段，不用再
-    // 切段——直接畫一條線／一塊面積即可。
-    var d = 'M ' + xFor(0).toFixed(1) + ',' + yFor(dom.min).toFixed(1);
-    for (var j = 0; j < n; j++) d += ' L ' + xFor(j).toFixed(1) + ',' + yFor(vals[j]).toFixed(1);
-    d += ' L ' + xFor(n - 1).toFixed(1) + ',' + yFor(dom.min).toFixed(1) + ' Z';
-    var area = svgEl('path');
-    area.setAttribute('d', d);
-    area.setAttribute('fill', color);
-    area.setAttribute('fill-opacity', '0.16');
-    area.setAttribute('stroke', 'none');
-    svg.appendChild(area);
-
-    var pts = [];
-    for (var k = 0; k < n; k++) pts.push(xFor(k).toFixed(1) + ',' + yFor(vals[k]).toFixed(1));
-    var poly = svgEl('polyline');
-    poly.setAttribute('points', pts.join(' '));
-    poly.setAttribute('fill', 'none');
-    poly.setAttribute('stroke', color);
-    poly.setAttribute('stroke-width', '2');
-    poly.setAttribute('stroke-linejoin', 'round');
-    poly.setAttribute('stroke-linecap', 'round');
-    svg.appendChild(poly);
-
-    return svg;
-  }
-
-  // ---- UI v2：近 12 個月四大費用堆疊長條（食材含包材／人事／可控／不可控）----
-  var BAR_SERIES = [
-    { key: 'food', label: '食材（含包材）', color: 'var(--brand)', get: function (r) { return safeNum(r.blocks && r.blocks['食材']) + safeNum(r.blocks && r.blocks['包材']); } },
-    { key: 'staff', label: '人事', color: '#2f6fb0', get: function (r) { return safeNum(r.blocks && r.blocks['人事']); } },
-    { key: 'controllable', label: '可控', color: '#a3781f', get: function (r) { return safeNum(r.blocks && r.blocks['可控']); } },
-    { key: 'uncontrollable', label: '不可控', color: '#6b6560', get: function (r) { return safeNum(r.blocks && r.blocks['不可控']); } }
+  var METRICS = [
+    { key: 'revenue', title: '營業額', blocks: ['營收'] },
+    { key: 'net', title: '稅後淨利', blocks: null },
+    { key: 'food', title: '食材費用（食材＋包材）', blocks: ['食材', '包材'] },
+    { key: 'labor', title: '人事費用', blocks: ['人事'] },
+    { key: 'controllable', title: '可控費用', blocks: ['可控'] },
+    { key: 'uncontrollable', title: '不可控費用', blocks: ['不可控'] }
   ];
 
-  // item 5：放大到與模板相當（H 220→380），且月份少於 6 個（含 0 個）時
-  // 只畫「有資料」的月份，不要保留滿 12 個欄位的空位讓長條全部擠在右邊。
-  function buildExpenseBarChart(allRows, isAllView) {
-    var compact = compactToValidRows(allRows, isAllView, 6);
-    var rows = compact.rows;
-    var valid = compact.valid;
+  // 從 getMonth 的 result 或 getTrend 的逐月列取出某項目的金額（兩者形狀相同：
+  // {blocks, net_profit}）。
+  function metricValue(metric, row) {
+    if (!row) return 0;
+    if (metric.key === 'net') return safeNum(row.net_profit);
+    return metric.blocks.reduce(function (sum, b) { return sum + safeNum(row.blocks && row.blocks[b]); }, 0);
+  }
 
-    var W = 640, H = 380, padL = 54, padR = 14, padT = 18, padB = 34;
-    var innerW = W - padL - padR, innerH = H - padT - padB;
-    var n = rows.length;
-    var slot = n > 0 ? innerW / n : innerW;
-    var barW = Math.min(56, slot * 0.5);
+  // ---- 類別色：dataviz 驗證過的 8 色（淺色底，固定順序）----
+  var SERIES_PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
+  var SERIES_MIN_DELTA_E = 8; // OKLab ×100，dataviz 的相鄰色目標
 
-    var totals = rows.map(function (r) {
-      return BAR_SERIES.reduce(function (sum, s) { return sum + s.get(r); }, 0);
+  function hexToOklab(hex) {
+    var n = parseInt(hex.slice(1), 16);
+    var rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(function (c) {
+      c /= 255;
+      return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
     });
-    var maxTotal = Math.max.apply(null, totals.filter(function (v, i) { return valid[i]; }).concat([0]));
-    if (maxTotal <= 0) maxTotal = 1;
+    var l = Math.cbrt(0.4122214708 * rgb[0] + 0.5363325363 * rgb[1] + 0.0514459929 * rgb[2]);
+    var m = Math.cbrt(0.2119034982 * rgb[0] + 0.6806995451 * rgb[1] + 0.1073969566 * rgb[2]);
+    var s = Math.cbrt(0.0883024619 * rgb[0] + 0.2817188376 * rgb[1] + 0.6299787005 * rgb[2]);
+    return [
+      0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+    ];
+  }
+  function colorDeltaE(a, b) {
+    var x = hexToOklab(a), y = hexToOklab(b);
+    return Math.sqrt(Math.pow(x[0] - y[0], 2) + Math.pow(x[1] - y[1], 2) + Math.pow(x[2] - y[2], 2)) * 100;
+  }
+  function isHex6(c) { return typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c); }
+  // 白底上太淡的品牌色（例如淡黃）線條看不見：OKLab 亮度 > 0.86 視同沒設。
+  function usableOnWhite(hex) { return hexToOklab(hex)[0] <= 0.86; }
 
-    function yFor(v) { return padT + (1 - v / maxTotal) * innerH; }
-    function xCenter(i) { return padL + slot * i + slot / 2; }
+  // stores：[{store_id, brand_color}]，依門市順序。回傳 {sid: {color, dash}}。
+  // 先用門市品牌色；沒設、太淡、或跟已分配的顏色太像（ΔE<8，含同色）→ 改
+  // 用調色盤下一個夠不同的顏色；8 色都用完才重複色相、改畫虛線（第二種
+  // 編碼，dataviz：不自己生第 9 個色相）。整份清單一次分配，篩選／隱藏不重
+  // 新上色（色隨門市、不隨排名）。
+  function assignSeriesColors(stores) {
+    var used = [];
+    var out = {};
+    var cycle = 0;
+    function farEnough(c) {
+      return used.every(function (u) { return colorDeltaE(u, c) >= SERIES_MIN_DELTA_E; });
+    }
+    (stores || []).forEach(function (s) {
+      var own = isHex6(s.brand_color) ? s.brand_color.toLowerCase() : '';
+      var pick = null, dash = '';
+      if (own && usableOnWhite(own) && farEnough(own)) pick = own;
+      if (!pick) {
+        for (var i = 0; i < SERIES_PALETTE.length; i++) {
+          if (farEnough(SERIES_PALETTE[i])) { pick = SERIES_PALETTE[i]; break; }
+        }
+      }
+      if (!pick) {
+        pick = SERIES_PALETTE[cycle % SERIES_PALETTE.length];
+        dash = '6 4';
+        cycle++;
+      } else {
+        used.push(pick);
+      }
+      out[s.store_id] = { color: pick, dash: dash };
+    });
+    return out;
+  }
+
+  // ---- 刻度：含 0、約 4 格的整齊刻度 ----
+  function niceStep(raw) {
+    if (!(raw > 0)) return 1;
+    var mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    var f = raw / mag;
+    var nice = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10;
+    return nice * mag;
+  }
+  function niceDomain(values) {
+    var min = 0, max = 0;
+    values.forEach(function (v) { if (v < min) min = v; if (v > max) max = v; });
+    if (min === max) max = min + 1;
+    var step = niceStep((max - min) / 4);
+    var lo = Math.floor(min / step) * step;
+    var hi = Math.ceil(max / step) * step;
+    var ticks = [];
+    for (var t = lo; t <= hi + step / 2; t += step) ticks.push(Math.round(t * 100) / 100);
+    return { min: lo, max: hi, ticks: ticks };
+  }
+  // 軸標：萬為單位（中文閱讀習慣），1 萬以下照原數字。
+  function fmtAxis(v) {
+    if (v === 0) return '0';
+    var abs = Math.abs(v);
+    var sign = v < 0 ? '−' : '';
+    if (abs >= 10000) {
+      var w = abs / 10000;
+      var txt = w >= 100 ? String(Math.round(w)) : String(Math.round(w * 10) / 10);
+      return sign + txt + '萬';
+    }
+    return sign + fmtInt(abs);
+  }
+  function monthShort(m) { return m.slice(2, 4) + '/' + m.slice(5, 7); }
+
+  // ---- 單張走勢圖 ----
+  // opts: {title, width, months:[YYYY-MM], series:[{id, name, color, dash,
+  //   points:[{value, has, hollow, note}]}]}（points 與 months 等長）。
+  // 回傳一個 div（相對定位，內含 svg＋提示框＋螢幕閱讀器用的表格）。
+  function buildMetricChart(opts) {
+    var wrap = el('div', 'metric-chart-wrap');
+    var series = opts.series.filter(function (s) { return s.points.some(function (p) { return p.has; }); });
+    if (!series.length) {
+      wrap.appendChild(el('div', 'metric-chart-empty', opts.emptyText || '資料累積中'));
+      return wrap;
+    }
+    var months = opts.months;
+    var n = months.length;
+    var W = Math.max(240, Math.floor(opts.width || 600));
+    var H = W < 480 ? 168 : 196;
+    var padL = 46, padR = 14, padT = 12, padB = 24;
+    var innerW = W - padL - padR, innerH = H - padT - padB;
+    var stepX = n > 1 ? innerW / (n - 1) : 0;
+    function xFor(i) { return n > 1 ? padL + i * stepX : padL + innerW / 2; }
+
+    var all = [];
+    series.forEach(function (s) { s.points.forEach(function (p) { if (p.has) all.push(p.value); }); });
+    var dom = niceDomain(all);
+    function yFor(v) { return padT + (1 - (v - dom.min) / (dom.max - dom.min)) * innerH; }
 
     var svg = svgEl('svg');
-    svg.setAttribute('class', 'bar-svg');
+    svg.setAttribute('class', 'metric-chart');
+    svg.setAttribute('width', String(W));
+    svg.setAttribute('height', String(H));
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     svg.setAttribute('role', 'img');
-    svg.setAttribute('aria-label', '近 12 個月四大費用堆疊長條');
+    svg.setAttribute('aria-label', opts.title + '每月走勢（' + monthShort(months[0]) + '～' + monthShort(months[n - 1]) + '，' + series.length + ' 條線）');
 
-    [0, 0.5, 1].forEach(function (f) {
-      var val = f * maxTotal;
-      var y = padT + (1 - f) * innerH;
+    dom.ticks.forEach(function (t) {
+      var y = yFor(t).toFixed(1);
       var line = svgEl('line');
-      line.setAttribute('class', 'bar-gridline');
+      line.setAttribute('class', t === 0 ? 'metric-zeroline' : 'metric-gridline');
       line.setAttribute('x1', padL); line.setAttribute('x2', W - padR);
-      line.setAttribute('y1', y.toFixed(1)); line.setAttribute('y2', y.toFixed(1));
+      line.setAttribute('y1', y); line.setAttribute('y2', y);
       svg.appendChild(line);
       var label = svgEl('text');
-      label.setAttribute('class', 'bar-axis-label');
+      label.setAttribute('class', 'metric-axis-label');
       label.setAttribute('x', padL - 6);
-      label.setAttribute('y', (y + 3).toFixed(1));
+      label.setAttribute('y', (parseFloat(y) + 3.5).toFixed(1));
       label.setAttribute('text-anchor', 'end');
-      label.textContent = fmtInt(val);
+      label.textContent = fmtAxis(t);
       svg.appendChild(label);
     });
 
-    // 堆疊長條：每段的底/頂 y 都用明確的累加變數算，不用相減猜。
-    rows.forEach(function (r, i) {
-      if (!valid[i]) return;
-      var cx = xCenter(i);
-      var cumulative = 0;
-      BAR_SERIES.forEach(function (s) {
-        var v = s.get(r);
-        if (v <= 0) return;
-        var yBottom = yFor(cumulative);
-        cumulative += v;
-        var yTop = yFor(cumulative);
-        var rect = svgEl('rect');
-        rect.setAttribute('x', (cx - barW / 2).toFixed(1));
-        rect.setAttribute('y', yTop.toFixed(1));
-        rect.setAttribute('width', barW.toFixed(1));
-        rect.setAttribute('height', Math.max(0, yBottom - yTop).toFixed(1));
-        rect.setAttribute('fill', s.color);
-        svg.appendChild(rect);
+    var labelEvery = W < 420 ? 3 : (W < 640 ? 2 : 1);
+    months.forEach(function (m, i) {
+      if (i !== n - 1 && (n - 1 - i) % labelEvery !== 0) return;
+      var label = svgEl('text');
+      label.setAttribute('class', 'metric-x-label');
+      label.setAttribute('x', xFor(i).toFixed(1));
+      label.setAttribute('y', H - 6);
+      label.setAttribute('text-anchor', 'middle');
+      label.textContent = monthShort(m);
+      svg.appendChild(label);
+    });
+
+    function pathD(pts) {
+      return pts.map(function (p, k) { return (k ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ');
+    }
+    function addPath(pts, s, dashed) {
+      if (pts.length < 2) return;
+      var path = svgEl('path');
+      path.setAttribute('d', pathD(pts));
+      path.setAttribute('class', 'metric-line');
+      path.setAttribute('stroke', s.color);
+      var dash = dashed ? '3 4' : s.dash;
+      if (dash) path.setAttribute('stroke-dasharray', dash);
+      svg.appendChild(path);
+    }
+    function addDot(i, p, s, r, cls) {
+      var dot = svgEl('circle');
+      dot.setAttribute('cx', xFor(i).toFixed(1));
+      dot.setAttribute('cy', yFor(p.value).toFixed(1));
+      dot.setAttribute('r', String(r));
+      dot.setAttribute('class', cls || 'metric-dot');
+      dot.setAttribute('stroke', s.color);
+      dot.setAttribute('fill', p.hollow ? '#ffffff' : s.color);
+      svg.appendChild(dot);
+      return dot;
+    }
+
+    // 連續有資料的區間各畫一段；空心（估算／月中）點以虛線接到前一點。
+    series.forEach(function (s) {
+      var solid = [];
+      for (var i = 0; i <= n; i++) {
+        var p = i < n ? s.points[i] : null;
+        if (p && p.has && !p.hollow) {
+          solid.push([xFor(i), yFor(p.value)]);
+          continue;
+        }
+        addPath(solid, s, false);
+        if (p && p.has && p.hollow && i > 0 && s.points[i - 1].has) {
+          addPath([[xFor(i - 1), yFor(s.points[i - 1].value)], [xFor(i), yFor(p.value)]], s, true);
+        }
+        solid = [];
+      }
+      // 點：空心點一律畫；最後一個有資料的點、孤立點也畫（其他點不畫，線本身就夠）。
+      var lastIdx = -1;
+      s.points.forEach(function (p, i) { if (p.has) lastIdx = i; });
+      s.points.forEach(function (p, i) {
+        if (!p.has) return;
+        var prevHas = i > 0 && s.points[i - 1].has;
+        var nextHas = i < n - 1 && s.points[i + 1].has;
+        if (p.hollow || i === lastIdx || (!prevHas && !nextHas)) addDot(i, p, s, 3.5);
       });
     });
 
-    rows.forEach(function (r, i) {
-      if (n <= 6 || i === 0 || i === n - 1 || i % 3 === 0) {
-        var label = svgEl('text');
-        label.setAttribute('class', 'bar-x-label');
-        label.setAttribute('x', xCenter(i).toFixed(1));
-        label.setAttribute('y', H - 10);
-        label.setAttribute('text-anchor', 'middle');
-        label.textContent = r.month.slice(2, 4) + '/' + r.month.slice(5, 7);
-        svg.appendChild(label);
-      }
-    });
+    // ---- 滑過：十字線找最近的月份，提示框列出每條線當月數字 ----
+    var cross = svgEl('line');
+    cross.setAttribute('class', 'metric-crosshair');
+    cross.setAttribute('y1', padT); cross.setAttribute('y2', padT + innerH);
+    cross.style.display = 'none';
+    svg.appendChild(cross);
+    var hoverDots = svgEl('g');
+    svg.appendChild(hoverDots);
+    var hit = svgEl('rect');
+    hit.setAttribute('x', padL - 10); hit.setAttribute('y', 0);
+    hit.setAttribute('width', innerW + 20); hit.setAttribute('height', H);
+    hit.setAttribute('fill', 'transparent');
+    hit.setAttribute('class', 'metric-hit');
+    svg.appendChild(hit);
 
-    return svg;
-  }
+    var tip = el('div', 'metric-tooltip');
+    tip.setAttribute('aria-hidden', 'true'); // 視覺用；螢幕閱讀器讀下面的表格版
+    tip.hidden = true;
 
-  function buildBarLegend() {
-    var wrap = el('div', 'bar-legend');
-    BAR_SERIES.forEach(function (s) {
-      var item = document.createElement('span');
-      var dot = el('span', 'dot');
-      dot.style.background = s.color;
-      item.appendChild(dot);
-      item.appendChild(document.createTextNode(s.label));
-      wrap.appendChild(item);
+    function showAt(idx) {
+      if (idx < 0 || idx >= n) return;
+      cross.setAttribute('x1', xFor(idx).toFixed(1));
+      cross.setAttribute('x2', xFor(idx).toFixed(1));
+      cross.style.display = '';
+      while (hoverDots.firstChild) hoverDots.removeChild(hoverDots.firstChild);
+      tip.textContent = '';
+      tip.appendChild(el('div', 'metric-tooltip-title', months[idx]));
+      var rows = series.map(function (s) { return { s: s, p: s.points[idx] }; })
+        .filter(function (x) { return x.p && x.p.has; })
+        .sort(function (a, b) { return b.p.value - a.p.value; });
+      if (!rows.length) tip.appendChild(el('div', 'metric-tooltip-row', '這個月沒有資料'));
+      rows.forEach(function (x) {
+        var dot = addDot(idx, x.p, x.s, 5, 'metric-dot metric-dot-hover');
+        hoverDots.appendChild(dot);
+        var row = el('div', 'metric-tooltip-row');
+        var key = el('span', 'metric-key');
+        key.style.borderTopColor = x.s.color;
+        if (x.s.dash) key.style.borderTopStyle = 'dashed';
+        row.appendChild(key);
+        row.appendChild(el('span', 'metric-tooltip-value', 'NT$ ' + fmtInt(x.p.value) + (x.p.note ? '（' + x.p.note + '）' : '')));
+        if (series.length > 1 || opts.showSingleName) row.appendChild(el('span', 'metric-tooltip-name', x.s.name));
+        tip.appendChild(row);
+      });
+      tip.hidden = false;
+      var tipW = tip.offsetWidth || 160;
+      var left = xFor(idx) + 12;
+      if (left + tipW > W) left = xFor(idx) - 12 - tipW;
+      tip.style.left = Math.max(0, left) + 'px';
+      tip.style.top = padT + 'px';
+    }
+    function hide() {
+      cross.style.display = 'none';
+      while (hoverDots.firstChild) hoverDots.removeChild(hoverDots.firstChild);
+      tip.hidden = true;
+    }
+    function idxFromEvent(ev) {
+      var rect = svg.getBoundingClientRect();
+      var scale = rect.width ? W / rect.width : 1;
+      var x = (ev.clientX - rect.left) * scale;
+      if (n <= 1) return 0;
+      return Math.max(0, Math.min(n - 1, Math.round((x - padL) / stepX)));
+    }
+    var current = -1;
+    hit.addEventListener('pointermove', function (ev) { current = idxFromEvent(ev); showAt(current); });
+    hit.addEventListener('pointerdown', function (ev) { current = idxFromEvent(ev); showAt(current); });
+    hit.addEventListener('pointerleave', function () { current = -1; hide(); });
+    // 鍵盤：Tab 進圖後用左右鍵逐月看，Esc 收起。
+    svg.setAttribute('tabindex', '0');
+    svg.addEventListener('keydown', function (ev) {
+      if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') {
+        ev.preventDefault();
+        if (current < 0) current = n - 1;
+        else current = Math.max(0, Math.min(n - 1, current + (ev.key === 'ArrowLeft' ? -1 : 1)));
+        showAt(current);
+      } else if (ev.key === 'Escape') { current = -1; hide(); }
     });
+    svg.addEventListener('blur', function () { current = -1; hide(); });
+
+    wrap.appendChild(svg);
+    wrap.appendChild(tip);
+
+    // 表格版（螢幕閱讀器）：月份 × 線。
+    var table = el('table', 'visually-hidden');
+    var cap = el('caption', null, opts.title + '每月走勢');
+    table.appendChild(cap);
+    var thead = document.createElement('thead');
+    var hr = document.createElement('tr');
+    hr.appendChild(el('th', null, '月份'));
+    series.forEach(function (s) { hr.appendChild(el('th', null, s.name)); });
+    thead.appendChild(hr);
+    table.appendChild(thead);
+    var tbody = document.createElement('tbody');
+    months.forEach(function (m, i) {
+      var tr = document.createElement('tr');
+      tr.appendChild(el('th', null, m));
+      series.forEach(function (s) {
+        var p = s.points[i];
+        tr.appendChild(el('td', null, p && p.has ? 'NT$ ' + fmtInt(p.value) + (p.note ? '（' + p.note + '）' : '') : '無資料'));
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    wrap.appendChild(table);
     return wrap;
   }
 
-  var KPI_ICON_PATHS = {
-    revenue: ['M4 17V9l5-4 5 4v8', 'M9 21v-6h4v6', 'M20 21H4'],
-    food: ['M5 8h14l-1.2 11.2a2 2 0 01-2 1.8H8.2a2 2 0 01-2-1.8L5 8z', 'M9 8V6a3 3 0 016 0v2'],
-    staff: ['M8 11a3 3 0 100-6 3 3 0 000 6z', 'M2 20c0-3.3 2.7-6 6-6s6 2.7 6 6', 'M16 20c0-2.4-1-4.5-2.6-5.8A4 4 0 1116 12'],
-    profit: ['M3 17l6-6 4 4 8-8', 'M15 7h6v6']
-  };
-
-  function kpiIconBox(kind, bg) {
-    var box = el('div', 'kpi-icon-box');
-    box.style.background = bg;
-    box.appendChild(window.PnlIcon.lineIcon(KPI_ICON_PATHS[kind]));
-    return box;
-  }
-
-  // ---- UI v2 第二輪：頂排 4 張 KPI 卡，照模板比例重畫（item 1）----
-  // 卡片約 300px 高：左上圓形箭頭徽章＋百分比 → 上半部大面積折線（90% 寬／
-  // 130px 高） → 下方圖示方塊＋大寫標題＋大數字（36px）。
-  function buildKpiCard(opts) {
-    // opts: {label, value, badgeInfo, trend, valueFn, forceZeroMin, color, iconKind, iconBg, pctText, subRows}
-    var card = el('div', 'kpi-card');
-
-    card.appendChild(buildKpiBadge(opts.badgeInfo));
-
-    var sparkWrap = el('div', 'kpi-sparkline-wrap');
-    sparkWrap.appendChild(buildSparklineSvg(opts.trend, opts.valueFn, opts.isAllView, opts.forceZeroMin, opts.color));
-    card.appendChild(sparkWrap);
-
-    // item 2：「NT$」小字前綴跟數字放同一個 flex row（同一行、不換行），
-    // 數字用 clamp() 字級。item 3：kpi-bottom 用 margin-top:auto 貼齊卡片
-    // 底部——但「佔營收」跟「食材/包材」子項目兩塊都一定要渲染（沒資料
-    // 就是空的），不然有的卡有這兩塊、有的沒有，會讓 kpi-bottom 在每張卡
-    // 上的垂直位置不一樣，圖示/數字對不齊。
-    var bottom = el('div', 'kpi-bottom');
-    bottom.appendChild(kpiIconBox(opts.iconKind, opts.iconBg));
-    var textWrap = el('div', 'kpi-text');
-    textWrap.appendChild(el('div', 'kpi-label', opts.label));
-    var valueLine = el('div', 'kpi-value');
-    valueLine.appendChild(el('span', 'kpi-value-prefix', 'NT$'));
-    // 真的空白文字節點（不是 CSS gap）：innerText／e2e 找 "NT$ "+數字 這個
-    // 子字串時才讀得到中間的空格（見 css.html 同一段的說明）。
-    valueLine.appendChild(document.createTextNode(' '));
-    valueLine.appendChild(el('span', 'kpi-value-num', fmtInt(opts.value)));
-    textWrap.appendChild(valueLine);
-    textWrap.appendChild(el('div', 'kpi-pct-line', opts.pctText ? '佔營收 ' + opts.pctText : ''));
-    bottom.appendChild(textWrap);
-    card.appendChild(bottom);
-
-    var subWrap = el('div', 'kpi-sub-rows');
-    (opts.subRows || []).forEach(function (row) {
-      var line = document.createElement('div');
-      line.appendChild(el('span', null, row[0]));
-      line.appendChild(el('span', null, 'NT$ ' + fmtInt(row[1])));
-      subWrap.appendChild(line);
+  // 多線圖例（可點選隱藏）：按鈕、aria-pressed＝顯示中。
+  function buildSeriesLegend(items, hiddenMap, onToggle) {
+    var wrap = el('div', 'series-legend');
+    wrap.setAttribute('role', 'group');
+    wrap.setAttribute('aria-label', '圖例（點選可隱藏／顯示該門市的線）');
+    items.forEach(function (it) {
+      var btn = el('button', 'legend-item');
+      btn.type = 'button';
+      btn.setAttribute('aria-pressed', String(!hiddenMap[it.id]));
+      var key = el('span', 'metric-key');
+      key.style.borderTopColor = it.color;
+      if (it.dash) key.style.borderTopStyle = 'dashed';
+      btn.appendChild(key);
+      btn.appendChild(document.createTextNode(it.name));
+      btn.addEventListener('click', function () { onToggle(it.id); });
+      wrap.appendChild(btn);
     });
-    card.appendChild(subWrap);
-    return card;
+    return wrap;
   }
 
   // ---- UI v2：科目明細表格 ----
@@ -6262,6 +6583,12 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         } else if (pendingSet[a.acc_id]) {
           status = 'pending';
           source = '—';
+        } else if (a.params && a.params.optional === true &&
+                   (isAllView ? !safeNum(amount) : accEntries.length === 0)) {
+          // Fable #59 輕5：選填科目（engine 本來就不列待補）本月沒有明細時標「選填」，
+          // 不是「已填」。ALL 視圖沒有逐筆明細，用合計金額為 0 判斷。
+          status = 'optional';
+          source = '選填（本月未填）';
         } else if (accEntries.some(function (e) { return e.source === '確認為0'; })) {
           status = 'zero';
           source = '確認為0';
@@ -6487,7 +6814,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   }
 
   // ---- 待補清單 ----
-  function renderPendingList(container, pending, storeLabelFn, isAllView, canEdit) {
+  function renderPendingList(container, pending, storeLabelFn, isAllView, canEdit, opts) {
     container.innerHTML = '';
     function renderGroup(accIds) {
       if (!accIds || accIds.length === 0) {
@@ -6513,13 +6840,28 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       container.appendChild(el('div', 'pending-empty', '沒有待補科目'));
       return;
     }
+    // Fable #59 中1：全部門市時逐店可折疊（details／summary＋筆數），只有本月
+    // 已經有明細的店預設展開，其餘收合，整張卡的高度才不會被十幾家店撐爆。
     var anyPending = false;
     storeIds.forEach(function (sid) {
       var list = pending[sid] || [];
       if (list.length === 0) return;
       anyPending = true;
-      container.appendChild(el('div', 'pending-group-title', storeLabelFn(sid)));
+      var det = document.createElement('details');
+      det.className = 'pending-store';
+      det.open = !!(opts && opts.hasEntries && opts.hasEntries(sid));
+      var sum = document.createElement('summary');
+      sum.id = 'pendingStore-' + sid;
+      sum.className = 'pending-group-title';
+      sum.textContent = storeLabelFn(sid) + '（待補 ' + list.length + '）';
+      det.appendChild(sum);
+      var inner = el('div', 'pending-store-body');
+      det.appendChild(inner);
+      container.appendChild(det);
+      var saved = container;
+      container = inner;
       renderGroup(list);
+      container = saved;
     });
     if (!anyPending) {
       container.appendChild(el('div', 'pending-empty', '沒有待補科目'));
@@ -6574,8 +6916,18 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     // gas/settings.html 「建立上月草稿／立即拉取本月連接器」區共用同一段文字。
     var NO_STORE_HINT_TEXT = '尚未設定門市：管理者請到「設定 ▸ 門市」新增，或在試算表點選單「損益系統 ▸ 載入光復門市資料」';
 
+    // dashboard-redesign：門市的品牌／類型／品牌色（getSettings.stores）。顯示
+    // 名稱帶品牌前綴（兩家「新竹光復」才分得出來），規則在 shell.html
+    // window.PnlStoreLabel，全站共用。
+    var storeMeta = {};
     function storeLabel(sid) {
       return storeNameMap[sid] || sid;
+    }
+    // 「全部門市」比較圖要畫的門市：目前下拉看得到的全部單店（依權限，受限
+    // 帳號本來就沒有「全部」）。
+    function multiStoreIds() {
+      return Array.prototype.map.call(storeSelect.options, function (o) { return o.value; })
+        .filter(function (v) { return v !== 'ALL'; });
     }
 
     function refreshStoreOptionLabels() {
@@ -6636,7 +6988,18 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       return data.status === '無';
     }
 
-    function renderBody(data, trend, requestStore, requestMonth) {
+    // dashboard-redesign：品牌篩選（只在「全部門市」）與圖例隱藏狀態，切月份／
+    // 重畫都保留（使用者自己的選擇），切到別的分頁再回來才重置。
+    // Fable #59 輕6：品牌篩選與圖例隱藏記在 App（記憶體），換分頁回來沿用上次
+    // 的選擇；登出清掉（shell.html showLogin）。第一次進來品牌＝全部，但線超過
+    // LEGEND_DEFAULT_MAX 條時預設只畫前 6 條（其餘在圖例裡、可點開或按「顯示
+    // 全部」），同一張圖不會一次擠十幾條線。
+    var LEGEND_DEFAULT_MAX = 6;
+    var brandFilter = App.dashBrandFilter || '全部';
+    var hiddenSeries = App.dashHiddenSeries || (App.dashHiddenSeries = {});
+    var chartCtx = null; // 最近一次畫的六列（resize 時只重畫圖）
+
+    function renderBody(data, trend, requestStore, requestMonth, multi) {
       var isAll = requestStore === 'ALL'; // 見下方 load() 的註解：一定要用請求當下的 store，不能讀 state.store
       var result = data.result;
 
@@ -6651,6 +7014,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       document.getElementById('downloadSelect').disabled = false;
 
       dashBody.innerHTML = '';
+      chartCtx = null;
       var statusEl = document.getElementById('monthStatus');
       statusEl.textContent = '';
       if (isAll) {
@@ -6662,13 +7026,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         statusEl.textContent = '狀態：' + (data.status || '無');
         // Fable 第二輪對抗審查必修 5：光復店長手動上傳 POS（T01）之後，
         // posPush 的「人贏機器」規則會整個跳過自動推送（見
-        // gas/posPush.js 的 posPushHasLiveManualEntries_）——這個月不會
-        // 有「匯入:POS自動」的活著明細，畫面上不該還是空白讓人以為「自動
-        // 推送忘了跑」，改明講「POS 已由店長手動上傳，自動推送暫停」，
-        // 日期用這筆 T01 明細的建立時間（不管是當月還是上月，同一套規
-        // 則）。這個檢查要排在 MTD 檢查之前——T01 存在時本來就不會有
-        // 「匯入:POS自動」的活著明細，兩個條件互斥，順序其實不影響結果，
-        // 但語意上「人蓋過機器」優先講清楚比較好懂。
+        // gas/posPush.js 的 posPushHasLiveManualEntries_）——畫面上明講
+        // 「POS 已由店長手動上傳，自動推送暫停」。
         var manualEntry = (data.entries || []).find(function (e) {
           return e.source === '匯入:T01';
         });
@@ -6676,10 +7035,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           var manualMd = manualEntry.created_at ? taipeiDateToMD(manualEntry.created_at) : '';
           statusEl.textContent += '　POS 已由店長手動上傳' + (manualMd ? '（' + manualMd + '）' : '') + '，自動推送暫停';
         } else {
-          // T18b：POS 自動推送月中累計——posPush 寫進明細備註的「本月累計
-          // 至 M/D」原封不動抓來顯示在狀態旁，不用重新算一次（note 是
-          // 穩定來源，見 gas/posPush.js）。只在單店視圖顯示（ALL 彙總沒有
-          // 單一「累計到哪一天」的意義）。
+          // T18b：POS 自動推送月中累計——原封不動顯示明細備註的「本月累計至 M/D」。
           var mtdEntry = (data.entries || []).find(function (e) {
             return e.source === '匯入:POS自動' && typeof e.note === 'string' && e.note.indexOf('本月累計至') === 0;
           });
@@ -6689,18 +7045,16 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         }
       }
 
-      // Fable 審查 #3：這個月完全沒建草稿 → 空狀態，不畫卡片／待補／上月比較。
-      // 趨勢圖仍然畫（那是歷史脈絡，跟「這個月」是否建草稿是兩件事）。
-      if (monthIsEmpty(data, isAll)) {
+      var emptyMonth = monthIsEmpty(data, isAll);
+      // Fable 審查 #3：這個月完全沒建草稿 → 空狀態，不畫待補／上月比較；
+      // 走勢仍然畫（那是歷史脈絡，跟「這個月」是否建草稿是兩件事）。
+      if (emptyMonth) {
         renderEmptyState();
-        renderChartsSection(trend, isAll);
+        renderMetricRows({ isAll: isAll, empty: true, result: null, prev: null, trend: trend, multi: multi, requestStore: requestStore, requestMonth: requestMonth, data: data });
         return;
       }
 
       var prev = data.prev;
-      var blocks = result.blocks || {};
-      var prevBlocks = prev ? prev.blocks : null;
-      var revenueVal = safeNum(blocks['營收']);
 
       // Fable 審查 #5：ALL 的上月比較，如果「這個月」的店集合跟
       // prev_stores（上月比較實際包含的店）不一樣，代表比較基礎不同，不該
@@ -6710,68 +7064,25 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         var currentStoreIds = Object.keys(data.status || {});
         mismatch = !sameStringSet(currentStoreIds, data.prev_stores || []);
       }
-
-      // Fable 第二輪對抗審查建議 8：月中（當月、未定稿）時，所有「較上月」
-      // 卡片（不只營收）都改標「月中，不比較」——本系統沒有逐日資料能算出
-      // 真正的「上月同期」，用整月金額對半個月硬湊出來的百分比／漲跌會
-      // 誤導 Eason（食材成本半個月看起來「大跌」，其實只是月份還沒過完）。
-      // 挪到 deltaFor／badgeInfoFor 定義之前，這兩個共用函式才能直接判斷。
-      var isCurrentMonthPartial = !isAll && requestMonth === taipeiMonthNow() && data.status !== '定稿';
-      // buildKpiBadge 對 mismatch:true 的徽章只會顯示 info.hintText 那個
-      // 小字（見該函式），不是 full／short——這裡刻意把「月中，不比較」放
-      // hintText，才是畫面上真的看得到的那段文字；full/short 保留只是跟
-      // deltaInfo() 回傳形狀一致，不影響實際渲染。沿用 mismatch:true 這個
-      // 既有的「灰色—＋小字」版面，不用另外設計一種徽章樣式。
-      var MTD_INFO = { dir: 'flat', arrow: '—', full: '月中，不比較', short: '—', mismatch: true, hintText: '月中，不比較' };
-
-      function deltaFor(cur, prevVal) {
-        if (isCurrentMonthPartial) return el('div', 'delta flat', MTD_INFO.hintText);
-        if (mismatch) return mismatchDeltaEl();
-        return deltaEl(cur, prevVal);
-      }
-      // KPI 卡用的圓形徽章版本（item 1）：mismatch 時回傳同一個
-      // MISMATCH_INFO，buildKpiBadge 知道怎麼把它畫成灰色「—」＋小字，
-      // 不會取代整個徽章區域；isCurrentMonthPartial 時同樣的版面改顯示
-      // MTD_INFO。
-      function badgeInfoFor(cur, prevVal) {
-        if (isCurrentMonthPartial) return MTD_INFO;
-        if (mismatch) return MISMATCH_INFO;
-        return deltaInfo(cur, prevVal);
-      }
-
       if (mismatch) {
-        var note = el('div', 'mismatch-note',
+        dashBody.appendChild(el('div', 'mismatch-note',
           '＊全部合計本月與上月的店家組成不同（上月比較僅涵蓋：' +
-          (data.prev_stores || []).map(storeLabel).join('、') + '），較上月比較僅供參考、不顯示百分比。');
-        dashBody.appendChild(note);
+          (data.prev_stores || []).map(storeLabel).join('、') + '），較上月比較僅供參考、不顯示百分比。'));
       }
 
-      // ---- 頂排 4 張 KPI 卡（營業額／食材成本(含包材)／人事／稅後淨利） ----
-      var foodCost = safeNum(blocks['食材']) + safeNum(blocks['包材']);
-      var prevFoodCost = prevBlocks ? safeNum(prevBlocks['食材']) + safeNum(prevBlocks['包材']) : null;
-
-      // T18c（人事估算）：result.estimates／result.estimate_basis 只有
-      // gas/api.js 的 attachLaborEstimateIfApplicable_ 在「單店、當月、
-      // 未定稿、快取有值」時才會附加，ALL 彙總視圖／已定稿月份一律沒有
-      // 這兩個欄位，這裡不用另外判斷 isAll——沒有就是沒有估算，標記自然
-      // 不會出現。
+      // T18c／T18d：估算只在「單店、當月、未定稿」附加（ALL 與已定稿月份一律
+      // 沒有這些欄位）。依估算落在哪些區塊決定哪幾列標「（估）」。
       var hasEstimate = !!(result.estimates && Object.keys(result.estimates).length);
       var estimateBasis = result.estimate_basis;
-      var laborKpiLabel = '人事' + (hasEstimate ? '（估）' : '');
-
-      // T18d（成本估算）：result.block_estimates（食材／包材整區塊，見
-      // gas/costEstimate.js computeBlockCostEstimates_）與
-      // result.cost_estimate_basis（水電瓦斯／抽成固定費，逐科目，見
-      // gas/api.js attachCostEstimatesIfApplicable_）——跟人事估算是各自
-      // 獨立附加的欄位，「稅後淨利（含估算）」只要任一種估算存在就要標。
       var blockEstimates = result.block_estimates || {};
-      var hasBlockEstimate = !!Object.keys(blockEstimates).length;
       var costEstimateBasis = result.cost_estimate_basis || {};
-      var hasCostAccEstimate = !!Object.keys(costEstimateBasis).length;
-      var hasAnyEstimate = hasEstimate || hasBlockEstimate || hasCostAccEstimate;
-      var netProfitKpiLabel = '稅後淨利' + (hasAnyEstimate ? '（含估算）' : '');
-      var foodCostKpiLabel = '食材成本（含包材）' + (hasBlockEstimate ? '（估）' : '');
-      var controlExpenseLabel = '可控費用' + (hasCostAccEstimate ? '（估）' : '');
+      var estimatedBlocks = {};
+      if (hasEstimate) estimatedBlocks['人事'] = true;
+      Object.keys(blockEstimates).forEach(function (b) { estimatedBlocks[b] = true; });
+      Object.keys(costEstimateBasis).forEach(function (accId) {
+        var acc = (App.accounts || []).filter(function (a) { return a.acc_id === accId; })[0];
+        estimatedBlocks[acc && acc.block ? acc.block : '可控'] = true;
+      });
 
       if (hasEstimate && estimateBasis && estimateBasis.label) {
         dashBody.appendChild(el('div', 'mismatch-note', '人事估算：' + estimateBasis.label));
@@ -6782,74 +7093,19 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           dashBody.appendChild(el('div', 'mismatch-note', block + '估算：' + est.label));
         }
       });
-      if (hasCostAccEstimate) {
-        var costLabels = Object.keys(costEstimateBasis)
-          .map(function (accId) {
-            var b = costEstimateBasis[accId];
-            return (accountName ? accountName(accId) : accId) + '：' + (b && b.label ? b.label : '');
-          })
-          .join('；');
-        if (costLabels) dashBody.appendChild(el('div', 'mismatch-note', '費用估算：' + costLabels));
-      }
+      var costLabels = Object.keys(costEstimateBasis).map(function (accId) {
+        var b = costEstimateBasis[accId];
+        return accountName(accId) + '：' + (b && b.label ? b.label : '');
+      }).join('；');
+      if (costLabels) dashBody.appendChild(el('div', 'mismatch-note', '費用估算：' + costLabels));
 
-      var kpiRow = el('div', 'kpi-row');
-      kpiRow.appendChild(buildKpiCard({
-        label: '營業額', value: blocks['營收'],
-        badgeInfo: badgeInfoFor(blocks['營收'], prevBlocks ? prevBlocks['營收'] : null),
-        trend: trend, isAllView: isAll, forceZeroMin: true, color: 'var(--brand)',
-        valueFn: function (r) { return r.blocks && r.blocks['營收']; },
-        iconKind: 'revenue', iconBg: 'var(--brand)'
-      }));
-      kpiRow.appendChild(buildKpiCard({
-        label: foodCostKpiLabel, value: foodCost,
-        badgeInfo: badgeInfoFor(foodCost, prevFoodCost),
-        trend: trend, isAllView: isAll, forceZeroMin: true, color: '#a3781f',
-        valueFn: function (r) { return safeNum(r.blocks && r.blocks['食材']) + safeNum(r.blocks && r.blocks['包材']); },
-        iconKind: 'food', iconBg: '#8a6d1f',
-        pctText: fmtPct1(foodCost, revenueVal),
-        subRows: [['食材', blocks['食材']], ['包材', blocks['包材']]]
-      }));
-      kpiRow.appendChild(buildKpiCard({
-        label: laborKpiLabel, value: blocks['人事'],
-        badgeInfo: badgeInfoFor(blocks['人事'], prevBlocks ? prevBlocks['人事'] : null),
-        trend: trend, isAllView: isAll, forceZeroMin: true, color: '#2f6fb0',
-        valueFn: function (r) { return r.blocks && r.blocks['人事']; },
-        iconKind: 'staff', iconBg: 'var(--nav-bg)',
-        pctText: fmtPct1(blocks['人事'], revenueVal)
-      }));
-      kpiRow.appendChild(buildKpiCard({
-        label: netProfitKpiLabel, value: result.net_profit,
-        badgeInfo: badgeInfoFor(result.net_profit, prev ? prev.net_profit : null),
-        trend: trend, isAllView: isAll, forceZeroMin: false, color: 'var(--up)',
-        valueFn: function (r) { return r.net_profit; },
-        iconKind: 'profit', iconBg: 'var(--up)'
-      }));
-      dashBody.appendChild(kpiRow);
+      renderMetricRows({
+        isAll: isAll, empty: false, result: result, prev: prev, mismatch: mismatch,
+        estimatedBlocks: estimatedBlocks, trend: trend, multi: multi,
+        requestStore: requestStore, requestMonth: requestMonth, data: data
+      });
 
-      // ---- 第二排：可控／不可控／營業淨利（3 張小卡，沿用原本 expense-card 樣式） ----
-      var expenseGrid = el('div', 'expense-grid');
-
-      function expenseCard(title, amount, deltaNode) {
-        var card = el('div', 'expense-card');
-        card.appendChild(el('div', 'name', title));
-        card.appendChild(el('div', 'amount', 'NT$ ' + fmtInt(amount)));
-        card.appendChild(el('div', 'pct', '佔營收 ' + fmtPct1(amount, revenueVal)));
-        if (deltaNode) card.appendChild(deltaNode);
-        return card;
-      }
-
-      expenseGrid.appendChild(expenseCard(controlExpenseLabel, blocks['可控']));
-      expenseGrid.appendChild(expenseCard('不可控費用', blocks['不可控']));
-      var opCard = el('div', 'expense-card');
-      opCard.appendChild(el('div', 'name', '營業淨利'));
-      opCard.appendChild(el('div', 'amount', 'NT$ ' + fmtInt(result.operating_profit)));
-      opCard.appendChild(deltaFor(result.operating_profit, prev ? prev.operating_profit : null));
-      expenseGrid.appendChild(opCard);
-      dashBody.appendChild(expenseGrid);
-
-      // errors（若有；帳戶名稱／店名這些後端字串一律 textContent，不進
-      // innerHTML——這裡以前是用字串 join('<br>') 塞 innerHTML，是真的 XSS
-      // 風險，改成一行一個 <div>）。
+      // errors（若有；帳戶名稱／店名這些後端字串一律 textContent）。
       if (result.errors && result.errors.length > 0) {
         var errCard = el('div', 'errors-card');
         errCard.appendChild(el('strong', null, '這個月資料有問題：'));
@@ -6862,17 +7118,13 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         dashBody.appendChild(errCard);
       }
 
-      renderChartsSection(trend, isAll);
-
-      // ---- 科目明細表格 ----
+      // ---- 科目明細表格（沿用既有功能；「全部門市」時為全部門市合計，不受品牌篩選影響） ----
       dashBody.appendChild(el('div', 'section-title', '科目明細'));
       var accountsCard = el('div', 'accounts-table-card');
       dashBody.appendChild(accountsCard);
       buildAccountsTable(accountsCard, window.App.accounts || [], result, data.entries || [], isAll);
 
-      // T16：連接器帶入的科目明細——列出每個有連接器明細的科目，逐來源顯示
-      // （「連接器:現金帳」→「現金帳」），一科兩來源（例如職工福利＝現金帳＋薪資）
-      // 一眼看得出各帶多少。一律 textContent，不拼 innerHTML。
+      // T16：連接器帶入的科目明細——逐來源顯示。一律 textContent。
       var connRows = connectorSourceRows(data.entries || []);
       if (connRows.length) {
         dashBody.appendChild(el('div', 'section-title', '連接器帶入'));
@@ -6889,37 +7141,267 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       // 待補清單
       dashBody.appendChild(el('div', 'section-title', '待補清單'));
       var pendingCard = el('div', 'pending-card');
-      renderPendingList(pendingCard, result.pending, storeLabel, isAll, canEdit);
+      renderPendingList(pendingCard, result.pending, storeLabel, isAll, canEdit, {
+        hasEntries: function (sid) {
+          var rows = multi && multi.stores && multi.stores[sid];
+          var row = rows && rows.filter(function (r) { return r.month === requestMonth; })[0];
+          return !!(row && row.has_entries);
+        }
+      });
       dashBody.appendChild(pendingCard);
     }
 
-    function renderChartsSection(trend, isAll) {
-      var row = el('div', 'charts-row');
+    // ---- 六列項目卡 ----
+    // ctx: {isAll, empty, result, prev, mismatch, estimatedBlocks, trend, multi,
+    //       requestStore, requestMonth, data}
+    function renderMetricRows(ctx) {
+      var section = el('div', 'metric-section');
+      dashBody.appendChild(section);
+      chartCtx = { ctx: ctx, section: section };
+      drawMetricRows();
+    }
 
-      var barCard = el('div', 'chart-card');
-      barCard.appendChild(el('div', 'chart-card-title', '近 12 個月四大費用'));
-      barCard.appendChild(buildExpenseBarChart(trend, isAll));
-      barCard.appendChild(buildBarLegend());
-      row.appendChild(barCard);
+    // 目前「全部門市」視圖會畫哪些門市（依品牌篩選），順序同門市下拉。
+    // 近 12 個月完全沒資料的單位（例如剛載入的集團單位）不畫線、不佔圖例。
+    function visibleMultiStoreIds(multi) {
+      var ids = multiStoreIds().filter(function (sid) {
+        var rows = multi && multi.stores && multi.stores[sid];
+        return rows && rows.some(function (r) { return monthHasData(r, false); });
+      });
+      if (brandFilter === '全部') return ids;
+      return ids.filter(function (sid) { return (storeMeta[sid] && storeMeta[sid].brand) === brandFilter; });
+    }
 
-      var trendCard = el('div', 'chart-card');
-      trendCard.appendChild(el('div', 'chart-card-title', '營業額與稅後淨利率'));
-      var legend = el('div', 'trend-legend');
-      var l1 = document.createElement('span');
-      var dotSpan1 = el('span', 'dot'); dotSpan1.style.background = 'var(--brand)';
-      l1.appendChild(dotSpan1);
-      l1.appendChild(document.createTextNode('營收'));
-      var l2 = document.createElement('span');
-      var dotSpan2 = el('span', 'dot'); dotSpan2.style.background = '#2f6fb0';
-      l2.appendChild(dotSpan2);
-      l2.appendChild(document.createTextNode('稅後淨利率'));
-      legend.appendChild(l1);
-      legend.appendChild(l2);
-      trendCard.appendChild(legend);
-      trendCard.appendChild(buildTrendSvg(trend, isAll));
-      row.appendChild(trendCard);
+    function brandOptions() {
+      var order = ['鼎兆元', '墨竹亭', '小辛辣'];
+      var seen = {};
+      multiStoreIds().forEach(function (sid) {
+        var b = storeMeta[sid] && storeMeta[sid].brand;
+        if (b) seen[b] = true;
+      });
+      var extra = Object.keys(seen).filter(function (b) { return order.indexOf(b) === -1; }).sort();
+      return order.filter(function (b) { return seen[b]; }).concat(extra);
+    }
 
-      dashBody.appendChild(row);
+    function drawMetricRows() {
+      if (!chartCtx) return;
+      var ctx = chartCtx.ctx;
+      var section = chartCtx.section;
+      section.innerHTML = '';
+      var isAll = ctx.isAll;
+      var multi = ctx.multi;
+      var colors = assignSeriesColors(multiStoreIds().map(function (sid) {
+        return { store_id: sid, brand_color: storeMeta[sid] ? storeMeta[sid].brand_color : '' };
+      }));
+      var nowMonth = taipeiMonthNow();
+
+      // ---- 品牌篩選＋圖例（只在全部門市） ----
+      var brands = isAll ? brandOptions() : [];
+      if (brandFilter !== '全部' && brands.indexOf(brandFilter) === -1) brandFilter = '全部';
+      var seriesStores = [];
+      if (isAll) {
+        seriesStores = visibleMultiStoreIds(multi);
+        var bar = el('div', 'metric-filter-bar');
+        if (brands.length) {
+          var pills = el('div', 'filter-pills brand-filter');
+          pills.setAttribute('role', 'group');
+          pills.setAttribute('aria-label', '品牌篩選');
+          ['全部'].concat(brands).forEach(function (b, i) {
+            var btn = el('button', 'filter-pill', b);
+            btn.type = 'button';
+            btn.id = 'brandFilter-' + i;
+            btn.setAttribute('aria-pressed', String(brandFilter === b));
+            btn.addEventListener('click', function () {
+              brandFilter = b;
+              App.dashBrandFilter = b;
+              drawMetricRows();
+            });
+            pills.appendChild(btn);
+          });
+          bar.appendChild(pills);
+        }
+        // 使用者還沒動過圖例：超過 6 條時預設隱藏第 7 條以後（依門市順序，色不變）。
+        if (!App.dashLegendTouched) {
+          Object.keys(hiddenSeries).forEach(function (k) { delete hiddenSeries[k]; });
+          seriesStores.slice(LEGEND_DEFAULT_MAX).forEach(function (sid) { hiddenSeries[sid] = true; });
+        }
+        if (seriesStores.length > 1) {
+          bar.appendChild(buildSeriesLegend(seriesStores.map(function (sid) {
+            return { id: sid, name: storeLabel(sid), color: colors[sid].color, dash: colors[sid].dash };
+          }), hiddenSeries, function (sid) {
+            App.dashLegendTouched = true;
+            if (hiddenSeries[sid]) delete hiddenSeries[sid]; else hiddenSeries[sid] = true;
+            drawMetricRows();
+          }));
+        }
+        if (seriesStores.length > LEGEND_DEFAULT_MAX) {
+          var anyHidden = seriesStores.some(function (sid) { return hiddenSeries[sid]; });
+          var allBtn = el('button', 'btn-secondary legend-toggle-all', anyHidden ? '顯示全部 ' + seriesStores.length + ' 家' : '只顯示前 ' + LEGEND_DEFAULT_MAX + ' 家');
+          allBtn.type = 'button';
+          allBtn.id = 'legendToggleAll';
+          allBtn.addEventListener('click', function () {
+            App.dashLegendTouched = true;
+            if (anyHidden) seriesStores.forEach(function (sid) { delete hiddenSeries[sid]; });
+            else seriesStores.slice(LEGEND_DEFAULT_MAX).forEach(function (sid) { hiddenSeries[sid] = true; });
+            drawMetricRows();
+          });
+          bar.appendChild(allBtn);
+        }
+        if (brandFilter !== '全部') {
+          bar.appendChild(el('div', 'mismatch-note', '＊上方六列只含「' + brandFilter + '」的單位；下方科目明細仍是全部門市合計。'));
+        }
+        section.appendChild(bar);
+      }
+
+      // ---- 每列要顯示的金額：單店／全部＝getMonth；全部＋品牌篩選＝多店走勢當月加總 ----
+      var months = isAll ? (multi && multi.months) || [] : (ctx.trend || []).map(function (r) { return r.month; });
+      var curIdx = months.indexOf(ctx.requestMonth);
+      var headRow = ctx.result;
+      var prevRow = ctx.prev;
+      var mismatch = !!ctx.mismatch;
+      if (isAll && brandFilter !== '全部' && multi && curIdx >= 0) {
+        var sumAt = function (idx) {
+          var out = { blocks: {}, net_profit: 0, operating_profit: 0, stores: [] };
+          seriesStores.forEach(function (sid) {
+            var r = multi.stores[sid][idx];
+            if (!r || !monthHasData(r, false)) return;
+            out.stores.push(sid);
+            Object.keys(r.blocks || {}).forEach(function (b) { out.blocks[b] = safeNum(out.blocks[b]) + safeNum(r.blocks[b]); });
+            out.net_profit += safeNum(r.net_profit);
+            out.operating_profit += safeNum(r.operating_profit);
+          });
+          return out;
+        };
+        headRow = ctx.empty ? null : sumAt(curIdx);
+        var p = curIdx > 0 ? sumAt(curIdx - 1) : null;
+        prevRow = p && p.stores.length ? p : null;
+        mismatch = !!(headRow && prevRow && !sameStringSet(headRow.stores, prevRow.stores));
+      }
+
+      var revenueVal = headRow ? safeNum(headRow.blocks && headRow.blocks['營收']) : 0;
+      var isCurrentMonthPartial = !isAll && ctx.requestMonth === nowMonth && ctx.data && ctx.data.status !== '定稿';
+      var MTD_INFO = { dir: 'flat', arrow: '—', full: '月中，不比較', short: '—', mismatch: true, hintText: '月中，不比較' };
+      function badgeInfoFor(cur, prevVal) {
+        if (isCurrentMonthPartial) return MTD_INFO;
+        if (mismatch) return MISMATCH_INFO;
+        return deltaInfo(cur, prevVal);
+      }
+      var estimatedBlocks = ctx.estimatedBlocks || {};
+      var anyEstimate = Object.keys(estimatedBlocks).length > 0;
+
+      var width = Math.max(240, (section.clientWidth || dashBody.clientWidth || 640));
+      // 桌面：左欄 260px＋圖；手機（<768）：縱向堆疊，圖吃滿卡片寬。
+      var chartWidth = width >= 768 ? width - 260 - 60 : width - 28;
+
+      METRICS.forEach(function (metric) {
+        var estimated = metric.key === 'net' ? anyEstimate
+          : metric.blocks.some(function (b) { return estimatedBlocks[b]; });
+        var title = metric.title + (estimated ? (metric.key === 'net' ? '（含估算）' : '（估）') : '');
+
+        var card = el('div', 'metric-row');
+        card.setAttribute('data-metric', metric.key);
+        var head = el('div', 'metric-head');
+        head.appendChild(el('div', 'metric-title', title));
+        var valueLine = el('div', 'metric-value');
+        valueLine.appendChild(el('span', 'metric-value-prefix', 'NT$'));
+        valueLine.appendChild(document.createTextNode(' '));
+        valueLine.appendChild(el('span', 'metric-value-num', headRow ? fmtInt(metricValue(metric, headRow)) : '—'));
+        head.appendChild(valueLine);
+
+        if (headRow) {
+          var cur = metricValue(metric, headRow);
+          head.appendChild(el('div', 'metric-pct', metric.key === 'revenue' ? '佔營收 ' + (revenueVal ? '100.0%' : '—') : '佔營收 ' + fmtPct1(cur, revenueVal)));
+          var deltaWrap = el('div', 'metric-delta');
+          deltaWrap.appendChild(el('span', 'metric-delta-label', '較上月'));
+          deltaWrap.appendChild(buildKpiBadge(badgeInfoFor(cur, prevRow ? metricValue(metric, prevRow) : null)));
+          head.appendChild(deltaWrap);
+          if (metric.key === 'food') {
+            var sub = el('div', 'metric-sub-rows');
+            ['食材', '包材'].forEach(function (b) {
+              var line = document.createElement('div');
+              line.appendChild(el('span', null, b));
+              line.appendChild(el('span', null, 'NT$ ' + fmtInt(safeNum(headRow.blocks && headRow.blocks[b]))));
+              sub.appendChild(line);
+            });
+            head.appendChild(sub);
+          }
+          if (metric.key === 'net') {
+            var subN = el('div', 'metric-sub-rows');
+            var lineN = document.createElement('div');
+            lineN.appendChild(el('span', null, '營業淨利'));
+            lineN.appendChild(el('span', null, 'NT$ ' + fmtInt(safeNum(headRow.operating_profit))));
+            subN.appendChild(lineN);
+            head.appendChild(subN);
+          }
+        }
+        card.appendChild(head);
+
+        // ---- 走勢圖 ----
+        var chartBox = el('div', 'metric-chart-box');
+        chartBox.appendChild(el('div', 'metric-chart-title', '每月走勢'));
+        var series = [];
+        if (isAll) {
+          seriesStores.forEach(function (sid) {
+            if (hiddenSeries[sid]) return;
+            var rows = multi.stores[sid] || [];
+            series.push({
+              id: sid, name: storeLabel(sid), color: colors[sid].color, dash: colors[sid].dash,
+              points: rows.map(function (r) {
+                var has = monthHasData(r, false);
+                var partial = has && r.month === nowMonth && r.status !== '定稿';
+                return { value: metricValue(metric, r), has: has, hollow: partial, note: partial ? '月中累計' : '' };
+              })
+            });
+          });
+        } else {
+          var sid = ctx.requestStore;
+          var c = colors[sid] || { color: SERIES_PALETTE[0], dash: '' };
+          series.push({
+            id: sid, name: storeLabel(sid), color: c.color, dash: '',
+            points: (ctx.trend || []).map(function (r, i) {
+              var has = monthHasData(r, false);
+              var isSel = r.month === ctx.requestMonth;
+              // 選定月份的點用上方同一份數字（含估算），跟左邊金額對得上。
+              var val = isSel && headRow ? metricValue(metric, headRow) : metricValue(metric, r);
+              var partial = has && r.month === nowMonth && r.status !== '定稿';
+              var est = isSel && estimated;
+              return { value: val, has: has, hollow: est || partial, note: est ? '含估算' : (partial ? '月中累計' : '') };
+            })
+          });
+        }
+        var hiddenAll = isAll && seriesStores.length > 0 && series.length === 0;
+        card.appendChild(chartBox);
+        section.appendChild(card);
+        // 先掛上 DOM 再量實際寬度（手機縱向、桌面右欄），svg 以實際像素畫，
+        // 不靠 viewBox 縮放（字才不會在手機上縮到看不見）。
+        chartBox.appendChild(buildMetricChart({
+          title: title, width: chartBox.clientWidth || chartWidth, months: months, series: series,
+          emptyText: hiddenAll ? '所有門市都已隱藏，點上方圖例重新顯示' : '資料累積中'
+        }));
+      });
+
+      if (months.length) {
+        section.appendChild(el('div', 'metric-footnote', '空心點＋虛線＝估算或月中累計（尚未滿月）；滑過或點圖可看各月數字。'));
+      }
+    }
+
+    // 視窗寬度改變時只重畫圖（不重抓資料、不動科目明細表的篩選／分頁）。
+    var lastChartWidth = 0;
+    function onDashResize() {
+      if (!chartCtx || !document.body.contains(chartCtx.section)) return;
+      var w = chartCtx.section.clientWidth;
+      if (Math.abs(w - lastChartWidth) < 8) return;
+      lastChartWidth = w;
+      drawMetricRows();
+    }
+    var resizeTimer = null;
+    window.__pnlDashResize = function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(onDashResize, 150);
+    };
+    if (!window.__pnlDashResizeBound) {
+      window.__pnlDashResizeBound = true;
+      window.addEventListener('resize', function () { if (window.__pnlDashResize) window.__pnlDashResize(); });
     }
 
     var loadSeq = 0; // 請求序號：切店／切月太快時，只讓「最後一次」的回應畫面
@@ -6931,12 +7413,24 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     var PREFETCH_MAX = 3;
     function cacheKey(store, month) { return store + '|' + month; }
 
+    // 回傳 [getMonth, getTrend（單店）或 null, getTrendMulti（全部門市）或 null]。
+    // 全部門市不另外抓 ALL 彙總走勢：六列的圖是各店各一條線（一次請求取多店）。
     function fetchPair(store, month, opts) {
+      if (store === 'ALL') {
+        var ids = multiStoreIds();
+        return Promise.all([
+          call('getMonth', { store_id: store, month: month }, opts),
+          Promise.resolve(null),
+          ids.length ? call('getTrendMulti', { store_ids: ids, month: month, n: 12 }, opts) : Promise.resolve({ months: [], stores: {} })
+        ]);
+      }
       return Promise.all([
         call('getMonth', { store_id: store, month: month }, opts),
-        call('getTrend', { store_id: store, month: month, n: 12 }, opts)
+        call('getTrend', { store_id: store, month: month, n: 12 }, opts),
+        Promise.resolve(null)
       ]);
     }
+    function cacheEntry(results) { return { month: results[0], trend: results[1], multi: results[2] }; }
 
     // Fable 審查 #53 輕：畫面是快取、背景還在重抓（「更新中…」）時停用兩顆
     // 下載鈕，避免下載到可能過期的數字；背景回來畫好後再啟用。重抓失敗時維
@@ -6975,27 +7469,34 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       hideRetry();
       if (cached) {
         hasRenderedOnce = true;
-        renderBody(cached.month, cached.trend, requestStore, requestMonth);
+        renderBody(cached.month, cached.trend, requestStore, requestMonth, cached.multi);
         setRefreshing(true);
         setDownloadsEnabled(false);
       } else if (!hasRenderedOnce) {
         dashBody.innerHTML = '';
-        dashBody.appendChild(el('div', 'pending-empty', '載入中…'));
       }
+      // entry-menu：沒有快取可立即顯示 → 整頁讀取中遮罩；有快取沿用「更新中…」不遮罩。
+      var loadingToken = (!cached && window.PnlLoading) ? window.PnlLoading.show(function () {
+        if (seq === loadSeq && document.body.contains(dashBody)) showRetry('讀取太久，已解除畫面鎖定，請按重試', load);
+      }) : null;
+      function loadDone() { if (loadingToken !== null) window.PnlLoading.hide(loadingToken); }
       fetchPair(requestStore, requestMonth).then(function (results) {
-        if (dashCache) dashCache.set(key, { month: results[0], trend: results[1] }, tokenAtRequest, genAtRequest);
+        loadDone();
+        if (dashCache) dashCache.set(key, cacheEntry(results), tokenAtRequest, genAtRequest);
         if (seq !== loadSeq) return; // 使用者在回應回來前又切了一次，這筆回應已經過期
         if (!document.body.contains(dashBody)) return;
         hasRenderedOnce = true;
         // 快取內容跟新抓的一模一樣就不重畫（保留科目明細表的篩選／分頁）。
         if (!(cached && JSON.stringify(cached.month) === JSON.stringify(results[0]) &&
-              JSON.stringify(cached.trend) === JSON.stringify(results[1]))) {
-          renderBody(results[0], results[1], requestStore, requestMonth);
+              JSON.stringify(cached.trend) === JSON.stringify(results[1]) &&
+              JSON.stringify(cached.multi || null) === JSON.stringify(results[2]))) {
+          renderBody(results[0], results[1], requestStore, requestMonth, results[2]);
         }
         setRefreshing(false);
         setDownloadsEnabled(true);
         schedulePrefetch(seq, requestStore, requestMonth);
       }).catch(function (err) {
+        loadDone();
         if (seq !== loadSeq) return;
         if (!document.body.contains(dashBody)) return;
         setRefreshing(false);
@@ -7030,7 +7531,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         var tokenAtRequest = App.token;
         var genAtRequest = dashCache.generation;
         fetchPair(t[0], t[1], { background: true }).then(function (results) {
-          dashCache.set(cacheKey(t[0], t[1]), { month: results[0], trend: results[1] }, tokenAtRequest, genAtRequest);
+          dashCache.set(cacheKey(t[0], t[1]), cacheEntry(results), tokenAtRequest, genAtRequest);
           next();
         }).catch(function () { /* 預取失敗不打擾使用者，停止這一輪 */ });
       }
@@ -7039,6 +7540,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     }
 
     function boot() {
+      var bootToken = window.PnlLoading ? window.PnlLoading.show(function () {
+        if (document.body.contains(dashBody)) showRetry('讀取太久，已解除畫面鎖定，請按重試', boot);
+      }) : null;
+      function bootDone() { if (bootToken !== null) window.PnlLoading.hide(bootToken); }
       call('getSettings', {}).then(function (settings) {
         App.accounts = settings.accounts || [];
         if (settings.can_see_all !== undefined) {
@@ -7047,8 +7552,11 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         }
         var storeIds;
         if (settings.stores) {
-          settings.stores.forEach(function (s) { storeNameMap[s.store_id] = s.name; });
-          storeIds = settings.stores.map(function (s) { return s.store_id; });
+          settings.stores.forEach(function (s) {
+            storeNameMap[s.store_id] = window.PnlStoreLabel ? window.PnlStoreLabel(s) : s.name;
+            storeMeta[s.store_id] = { name: s.name, brand: String(s.brand || '').trim(), unit_type: String(s.unit_type || ''), brand_color: s.brand_color || '' };
+          });
+          storeIds = settings.stores.filter(function (s) { return s.active !== false; }).map(function (s) { return s.store_id; }); // 停用門市（例如剛載入、還沒啟用的集團單位）不列
         } else {
           storeIds = App.stores || [];
         }
@@ -7082,8 +7590,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           monthSelect.value = shiftMonthStr(nowMonth, -1);
         });
       }).then(function () {
+        bootDone();
         load();
       }).catch(function (err) {
+        bootDone();
         if (err && err.__noStore) return; // 已經在上面處理過了，不是真的錯誤
         if (err && err.error === 'AUTH') {
           handleApiError(err);
@@ -7153,7 +7663,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         downloadEntriesCsvBtn.disabled = false;
         var rows = window.PnlCsv.buildEntriesCsvRows(res.entries || [], {
           accountName: accountName,
-          storeName: storeLabel
+          // Fable #59 輕4：門市欄維持原名，品牌另起一欄；檔名仍用帶品牌的顯示名稱。
+          storeName: function (sid) { return (storeMeta[sid] && storeMeta[sid].name) || sid; },
+          storeBrand: function (sid) { return (storeMeta[sid] && storeMeta[sid].brand) || ''; }
         });
         var csv = window.PnlCsv.withBom(window.PnlCsv.buildCsv(rows));
         var filename = window.PnlCsv.csvFilename('明細', labelForFilename(store_id), month);
@@ -7351,6 +7863,26 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       });
     }
 
+    // entry-menu：「已填」＝本月有有效明細（含確認為0），或固定／公式這種自動算
+    // 的科目；待補（含估算值科目——估算不寫明細，本月仍無真實明細）一律不算已填。
+    function entryAccountIsFilled(a, pendingSet, liveByAcc) {
+      if (pendingSet[a.acc_id]) return false;
+      return !!liveByAcc[a.acc_id] || a.mode === '固定' || a.mode === '公式';
+    }
+    // Fable #59 輕5：選填科目（params.optional）本月沒有明細＝「選填」，不算待補
+    // （跟儀表板科目明細的「選填」一致；engine pending 本來就不含選填），但預設列出、
+    // 排在待補之後。
+    function entryAccountIsOptionalEmpty(a, pendingSet, liveByAcc) {
+      return !pendingSet[a.acc_id] && !liveByAcc[a.acc_id] && !!(a.params && a.params.optional === true);
+    }
+
+    // 同一區塊內：非選填（待補／已填）在前、選填且無明細在後，其餘順序不變（穩定）。
+    function entrySortOptionalLast(accs, pendingSet, liveByAcc) {
+      var head = [], tail = [];
+      accs.forEach(function (a) { (entryAccountIsOptionalEmpty(a, pendingSet, liveByAcc) ? tail : head).push(a); });
+      return head.concat(tail);
+    }
+
     // ---- 主渲染 ----
     window.renderEntry = function renderEntry(root) {
       var App = window.App;
@@ -7360,6 +7892,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       root.innerHTML =
         '<div class="filters"><select id="entryStoreSelect"></select><select id="entryMonthSelect"></select></div>' +
         '<div class="month-status" id="entryMonthStatus"></div>' +
+        '<div class="entry-toolbar" id="entryToolbar"></div>' +
         '<div class="retry-bar hidden" id="entryRetryBar"></div>' +
         '<div id="entryBody"></div>';
       // ⚠ 純靜態字串，見檔頭註解／test/ui/xss.test.js。
@@ -7370,6 +7903,62 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       var body = document.getElementById('entryBody');
       var storeNameMap = {};
       var hasRenderedOnce = false;
+      // entry-menu（2026-09-29）：類別（側邊欄「填資料」子選單／頁內膠囊）
+      // 與「顯示已填」開關。預設只列待補（估算值科目本月沒有真實明細，仍算
+      // 待補）；打開才列已填科目（可查看、作廢）。類別跨頁記在 App（記憶體），
+      // 「顯示已填」每次進頁預設關。
+      var CATS = window.PnlEntryCategories || [
+        { key: 'food', label: '食材費用', blocks: ['食材', '包材'] },
+        { key: 'labor', label: '人事費用', blocks: ['人事'] },
+        { key: 'controllable', label: '可控費用', blocks: ['可控'] },
+        { key: 'uncontrollable', label: '不可控費用', blocks: ['不可控', '營業稅', '營業外收入'] },
+        { key: 'revenue', label: '營業收入', blocks: ['營收'] }
+      ];
+      function currentCat() {
+        var key = App.entryCategory || CATS[0].key;
+        return CATS.filter(function (c) { return c.key === key; })[0] || CATS[0];
+      }
+      var showFilled = false;
+      var lastRender = null; // {data, requestStore, requestMonth}：切類別／開關時直接重畫，不重抓
+      var shownKey = null; // 目前畫面上是哪個 store|month（切換時才遮罩）
+
+      function renderToolbar() {
+        var bar = document.getElementById('entryToolbar');
+        if (!bar) return;
+        bar.textContent = '';
+        var pills = el('div', 'filter-pills entry-cat-pills');
+        pills.setAttribute('role', 'group');
+        pills.setAttribute('aria-label', '填資料類別');
+        var cur = currentCat();
+        CATS.forEach(function (c) {
+          var b = el('button', 'filter-pill', c.label);
+          b.type = 'button';
+          b.id = 'entryCat-' + c.key;
+          b.setAttribute('aria-pressed', String(c.key === cur.key));
+          b.addEventListener('click', function () {
+            if (window.PnlSetEntryCategory) window.PnlSetEntryCategory(c.key); else App.entryCategory = c.key;
+            renderToolbar();
+            rerender();
+          });
+          pills.appendChild(b);
+        });
+        bar.appendChild(pills);
+        var label = el('label', 'filter-toggle');
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.id = 'entryShowFilled';
+        cb.checked = showFilled;
+        cb.addEventListener('change', function () {
+          showFilled = cb.checked;
+          rerender();
+        });
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode('顯示已填'));
+        bar.appendChild(label);
+      }
+      function rerender() {
+        if (lastRender) renderBody(lastRender.data, lastRender.requestStore, lastRender.requestMonth);
+      }
 
       function storeLabel(sid) { return storeNameMap[sid] || sid; }
 
@@ -7789,6 +8378,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         titleWrap.appendChild(el('span', 'account-name', account.name));
         titleWrap.appendChild(el('span', 'account-mode-badge', account.mode));
         if (isPending) titleWrap.appendChild(el('span', 'account-pending-badge', '待補'));
+        else if (account.params && account.params.optional === true && accEntries.length === 0) titleWrap.appendChild(el('span', 'account-optional-badge', '選填'));
         header.appendChild(titleWrap);
         header.appendChild(el('div', 'account-value', 'NT$ ' + fmtInt(resultAccounts[account.acc_id])));
         card.appendChild(header);
@@ -7978,6 +8568,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
 
       // ---- 主 body render ----
       function renderBody(data, requestStore, requestMonth) {
+        lastRender = { data: data, requestStore: requestStore, requestMonth: requestMonth };
         body.innerHTML = '';
         var statusEl = document.getElementById('entryMonthStatus');
         statusEl.textContent = '狀態：' + (data.status || '無');
@@ -8020,17 +8611,42 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           accountsByBlock[b].sort(function (x, y) { return (x.sort || 0) - (y.sort || 0); });
         });
 
-        BLOCKS.forEach(function (block) {
-          var accs = accountsByBlock[block] || [];
+        // 「已填」＝本月有有效明細（含確認為0），或固定／公式這種自動算的科目；
+        // 其餘（待補、或選填但還沒填的科目，例如總部手填收入）都算待補、預設列出。
+        var liveByAcc = {};
+        (data.entries || []).forEach(function (e) { if (e && e.void !== true) liveByAcc[e.acc_id] = true; });
+        function isFilled(a) { return entryAccountIsFilled(a, pendingSet, liveByAcc); }
+        var cat = currentCat();
+        var shownCount = 0;
+        var hiddenFilled = 0;
+        cat.blocks.forEach(function (block) {
+          // 預設＝待補＋選填（選填排在待補之後、灰色「選填」徽章、不算待補）；
+          // 「顯示已填」只控制已填科目。總部手填收入 A098 這類選填科目才找得到。
+          var accs = (accountsByBlock[block] || []).filter(function (a) {
+            if (showFilled || !isFilled(a)) return true;
+            hiddenFilled++;
+            return false;
+          });
+          accs = entrySortOptionalLast(accs, pendingSet, liveByAcc);
           if (accs.length === 0) return;
           body.appendChild(el('div', 'section-title', block));
           accs.forEach(function (account) {
+            shownCount++;
             body.appendChild(renderAccountCard(
               account, data.entries || [], data.result.accounts || {}, pendingSet,
               canEdit, requestStore, requestMonth, function () { load(); }, status !== '無'
             ));
           });
         });
+        var hiddenParts = [];
+        if (hiddenFilled) hiddenParts.push('已填 ' + hiddenFilled + ' 個');
+        if (shownCount === 0) {
+          body.appendChild(el('div', 'empty-state entry-cat-empty',
+            showFilled ? '「' + cat.label + '」沒有科目'
+              : '「' + cat.label + '」沒有待補科目' + (hiddenParts.length ? '（' + hiddenParts.join('、') + '，打開「顯示已填」可查看）' : '')));
+        } else if (!showFilled && hiddenParts.length) {
+          body.appendChild(el('div', 'field-hint', '另有' + hiddenParts.join('、') + '科目，打開上方「顯示已填」可查看、填寫或作廢。'));
+        }
       }
 
       var loadSeq = 0;
@@ -8040,12 +8656,21 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         var requestMonth = monthSelect.value;
         if (window.PnlTheme && requestStore) window.PnlTheme.setStore(requestStore); // store-theme：切門市即時換色
         if (!requestStore || !requestMonth) return;
+        App.entryLastStore = requestStore;
+        App.entryLastMonth = requestMonth;
         if (!hasRenderedOnce) {
           body.innerHTML = '';
-          body.appendChild(el('div', 'pending-empty', '載入中…'));
         }
         hideRetry();
+        // entry-menu：畫面上沒有這個門市／月份的內容（首次進頁、切門市／月份）
+        // 才遮罩；新增／作廢後同一個月重抓，畫面內容仍有效，不遮罩。
+        var key = requestStore + '|' + requestMonth;
+        var loadingToken = (key !== shownKey && window.PnlLoading) ? window.PnlLoading.show(function () {
+          if (seq === loadSeq && document.body.contains(body)) showRetry('讀取太久，已解除畫面鎖定，請按重試', load);
+        }) : null;
+        function done() { if (loadingToken !== null) window.PnlLoading.hide(loadingToken); }
         call('getMonth', { store_id: requestStore, month: requestMonth }).then(function (data) {
+          done();
           if (seq !== loadSeq) return;
           // 跟 dashboard.html 同一條防呆（見那邊的註解）：使用者在回應回來前
           // 切去別的頁籤，body 底下的 DOM 已經被 renderActiveTab() 整包換掉，
@@ -8054,8 +8679,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           // 顯示在使用者眼前。
           if (!document.body.contains(body)) return;
           hasRenderedOnce = true;
+          shownKey = key;
           renderBody(data, requestStore, requestMonth);
         }).catch(function (err) {
+          done();
           if (seq !== loadSeq) return;
           if (!document.body.contains(body)) return;
           handleApiError(err);
@@ -8064,12 +8691,17 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       }
 
       function boot() {
+        var bootToken = window.PnlLoading ? window.PnlLoading.show(function () {
+          if (document.body.contains(body)) showRetry('讀取太久，已解除畫面鎖定，請按重試', boot);
+        }) : null;
+        function bootDone() { if (bootToken !== null) window.PnlLoading.hide(bootToken); }
         call('getSettings', {}).then(function (settings) {
+          bootDone();
           App.accounts = settings.accounts || [];
           var storeIds;
           if (settings.stores) {
-            settings.stores.forEach(function (s) { storeNameMap[s.store_id] = s.name; });
-            storeIds = settings.stores.map(function (s) { return s.store_id; });
+            settings.stores.forEach(function (s) { storeNameMap[s.store_id] = window.PnlStoreLabel ? window.PnlStoreLabel(s) : s.name; });
+            storeIds = settings.stores.filter(function (s) { return s.active !== false; }).map(function (s) { return s.store_id; }); // 停用門市（例如剛載入、還沒啟用的集團單位）不列
           } else {
             storeIds = App.stores || [];
           }
@@ -8077,11 +8709,14 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           buildStoreOptions(visibleStoreIds);
           buildMonthOptions();
 
-          var defaultStore = visibleStoreIds[0] || '';
+          // entry-menu：回到填資料頁（例如從子選單進來）沿用上次選的門市／月份。
+          var defaultStore = (App.entryLastStore && visibleStoreIds.indexOf(App.entryLastStore) !== -1) ? App.entryLastStore : (visibleStoreIds[0] || '');
           storeSelect.value = defaultStore;
-          monthSelect.value = taipeiMonthNow();
+          var lastMonthOk = App.entryLastMonth && monthOptions().indexOf(App.entryLastMonth) !== -1;
+          monthSelect.value = lastMonthOk ? App.entryLastMonth : taipeiMonthNow();
           load();
         }).catch(function (err) {
+          bootDone();
           // 必修7：boot() 自己失敗時，「重試」要重跑 boot()（重新拉
           // getSettings、重建下拉選單），不能誤用 load()。
           handleApiError(err);
@@ -8092,6 +8727,13 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       storeSelect.addEventListener('change', load);
       monthSelect.addEventListener('change', load);
 
+      // 側邊欄子選單在本頁時只通知換類別（見 shell.html selectEntryCategory）。
+      window.__pnlEntryOnCategory = function () {
+        if (!document.body.contains(body)) return;
+        renderToolbar();
+        rerender();
+      };
+      renderToolbar();
       boot();
     };
   })();
@@ -8249,6 +8891,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       var previewEl = document.getElementById('impPreview');
 
       var storeNameMap = {};
+      var storeDisplayMap = {};
       var templates = [];
       var currentTpl = null; // 目前套用的範本設定（可能是原範本、也可能是管理者在進階設定裡改過還沒存的版本）
       var currentTplSaved = true; // Fable 審查建議 #10：只有「確實存在 templates 清單裡」的範本設定才算數
@@ -8780,14 +9423,40 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       }
 
       // ---- 開機：載入 settings（stores／accounts／templates）----------
+      // entry-menu：讀取中遮罩；失敗時顯示「重試」（不再只跳 toast 留一個空頁面）。
+      var importRetryBar = el('div', 'retry-bar hidden');
+      root.insertBefore(importRetryBar, root.firstChild);
+      function showImportRetry(msg) {
+        importRetryBar.textContent = '';
+        importRetryBar.appendChild(el('span', null, msg));
+        var rb = el('button', 'btn-retry', '重試');
+        rb.type = 'button';
+        rb.addEventListener('click', bootImport);
+        importRetryBar.appendChild(rb);
+        importRetryBar.classList.remove('hidden');
+      }
+      function bootImport() {
+      importRetryBar.classList.add('hidden');
+      importRetryBar.textContent = '';
+      var bootToken = window.PnlLoading ? window.PnlLoading.show(function () {
+        showImportRetry('讀取太久，已解除畫面鎖定，請按重試');
+      }) : null;
+      function bootDone() { if (bootToken !== null) window.PnlLoading.hide(bootToken); }
       call('getSettings', {}).then(function (settings) {
+        bootDone();
+        storeSelect.innerHTML = '';
+        monthSelect.innerHTML = '';
         App.accounts = settings.accounts || [];
         templates = settings.templates || [];
 
         var storeIds;
         if (settings.stores) {
-          settings.stores.forEach(function (s) { storeNameMap[s.store_id] = s.name; });
-          storeIds = settings.stores.map(function (s) { return s.store_id; });
+          // storeNameMap 留原始名稱（POS 檔「店別」欄比對用）；選單文字用帶品牌的顯示名稱。
+          settings.stores.forEach(function (s) {
+            storeNameMap[s.store_id] = s.name;
+            storeDisplayMap[s.store_id] = window.PnlStoreLabel ? window.PnlStoreLabel(s) : s.name;
+          });
+          storeIds = settings.stores.filter(function (s) { return s.active !== false; }).map(function (s) { return s.store_id; }); // 停用門市（例如剛載入、還沒啟用的集團單位）不列
         } else {
           storeIds = App.stores || [];
         }
@@ -8795,7 +9464,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         selectableStores.forEach(function (sid) {
           var opt = document.createElement('option');
           opt.value = sid;
-          opt.textContent = storeLabel(sid);
+          opt.textContent = storeDisplayMap[sid] || storeLabel(sid);
           storeSelect.appendChild(opt);
         });
 
@@ -8817,7 +9486,13 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         } else {
           previewEl.appendChild(el('div', 'pending-empty', '還沒有任何匯入範本，請先請管理者新增一個。'));
         }
-      }).catch(handleApiError);
+      }).catch(function (err) {
+        bootDone();
+        if (err && err.error === 'AUTH') { handleApiError(err); return; }
+        showImportRetry(errorMessage(err) || '載入失敗，請稍後再試');
+      });
+      }
+      bootImport();
 
       tplSelect.addEventListener('change', function () {
         var tpl = templates.filter(function (t) { return t.tpl_id === tplSelect.value; })[0];
@@ -9224,7 +9899,19 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       function nextLocalId_() { return 'local-' + (++localIdSeq); }
 
       function load() {
+        var seqAtLoad = root.__pnlRenderSeq;
+        var loadingToken = window.PnlLoading ? window.PnlLoading.show(function () {
+          if (root.__pnlRenderSeq !== seqAtLoad) return;
+          seqAtLoad = -1; // 晚到的回應不再重畫
+          state.loading = false;
+          state.error = '讀取太久，已解除畫面鎖定，請按重試';
+          renderShell();
+        }) : null;
+        function loadDone() { if (loadingToken !== null) window.PnlLoading.hide(loadingToken); }
         call('getSettings', {}).then(function (data) {
+          loadDone();
+          // 使用者在載入途中已經切到別的分頁：不要把設定頁畫回去蓋掉它。
+          if (root.__pnlRenderSeq !== seqAtLoad) return;
           state.loading = false;
           state.error = null;
           state.data = data;
@@ -9264,6 +9951,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           state.usersPendingCodes = {};
           renderShell();
         }).catch(function (err) {
+          loadDone();
+          if (root.__pnlRenderSeq !== seqAtLoad) return;
           state.loading = false;
           state.error = errorMessage(err);
           renderShell();
@@ -9569,13 +10258,23 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       function renderStoresSection(panel) {
         panel.appendChild(el('div', 'settings-section-title', '門市'));
         panel.appendChild(el('div', 'field-hint', '品牌色（選填，#RRGGBB）：畫面選到這家店時整個系統換成這個顏色；選「全部合計」或沒設時用「系統設定」的主色。'));
+        panel.appendChild(el('div', 'field-hint', '品牌（選填，例如鼎兆元／墨竹亭／小辛辣）與類型（總部／門市／央廚）：儀表板「全部門市」的品牌篩選與各店比較用；名稱裡沒有品牌字樣時，畫面會自動在前面加上品牌。'));
+        // dashboard-redesign：品牌輸入框的建議清單（可自訂文字，不限這三個）。
+        var brandList = document.createElement('datalist');
+        brandList.id = 'storeBrandOptions';
+        ['鼎兆元', '墨竹亭', '小辛辣'].forEach(function (b) {
+          var o = document.createElement('option');
+          o.value = b;
+          brandList.appendChild(o);
+        });
+        panel.appendChild(brandList);
         var wrap = el('div', 'table-wrap');
         var table = document.createElement('table');
         table.className = 'data-table';
         table.id = 'storesTable';
         var thead = document.createElement('thead');
         var trh = document.createElement('tr');
-        ['store_id', '名稱', '啟用', '品牌色', ''].forEach(function (h) { trh.appendChild(el('th', null, h)); });
+        ['store_id', '名稱', '啟用', '品牌色', '品牌', '類型', ''].forEach(function (h) { trh.appendChild(el('th', null, h)); });
         thead.appendChild(trh);
         table.appendChild(thead);
         var tbody = document.createElement('tbody');
@@ -9644,6 +10343,37 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
             colorTd.appendChild(colorBox);
             tr.appendChild(colorTd);
 
+            // dashboard-redesign：品牌（文字＋建議清單）、類型（下拉）。
+            var brandTd = document.createElement('td');
+            var brandInput = document.createElement('input');
+            brandInput.type = 'text';
+            brandInput.className = 'store-brand-input';
+            brandInput.id = 'storeBrand-' + r.store_id;
+            brandInput.setAttribute('list', 'storeBrandOptions');
+            brandInput.setAttribute('aria-label', r.store_id + ' 品牌');
+            brandInput.maxLength = 20;
+            brandInput.placeholder = '例如 墨竹亭';
+            brandInput.value = r.brand || '';
+            brandInput.addEventListener('input', function () { r.brand = brandInput.value; });
+            brandTd.appendChild(brandInput);
+            tr.appendChild(brandTd);
+
+            var typeTd = document.createElement('td');
+            var typeSelect = document.createElement('select');
+            typeSelect.className = 'store-type-select';
+            typeSelect.id = 'storeType-' + r.store_id;
+            typeSelect.setAttribute('aria-label', r.store_id + ' 類型');
+            [['', '（未設）'], ['總部', '總部'], ['門市', '門市'], ['央廚', '央廚']].forEach(function (t) {
+              var o = document.createElement('option');
+              o.value = t[0];
+              o.textContent = t[1];
+              if ((r.unit_type || '') === t[0]) o.selected = true;
+              typeSelect.appendChild(o);
+            });
+            typeSelect.addEventListener('change', function () { r.unit_type = typeSelect.value; });
+            typeTd.appendChild(typeSelect);
+            tr.appendChild(typeTd);
+
             var actionTd = document.createElement('td');
             var delBtn = el('button', 'btn-danger', '移除');
             delBtn.type = 'button';
@@ -9663,7 +10393,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         addBtn.type = 'button';
         addBtn.addEventListener('click', function () {
           var id = nextId('S', rows.map(function (r) { return r.store_id; }), 2);
-          rows.push({ store_id: id, name: '', active: true, brand_color: '' });
+          rows.push({ store_id: id, name: '', active: true, brand_color: '', brand: '', unit_type: '' });
           renderRows();
         });
         panel.appendChild(addBtn);
@@ -9686,10 +10416,15 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
             if (seen[r.store_id]) { errEl.textContent = 'store_id 重複：' + r.store_id; return; }
             r.brand_color = (r.brand_color || '').trim().toUpperCase();
             if (r.brand_color && !HEX_RE.test(r.brand_color)) { errEl.textContent = r.store_id + '：品牌色格式須為 #RRGGBB（或留空）'; return; }
+            r.brand = (r.brand || '').trim();
+            if (r.brand.length > 20) { errEl.textContent = r.store_id + '：品牌最多 20 個字'; return; }
+            r.unit_type = r.unit_type || '';
+            if (['', '總部', '門市', '央廚'].indexOf(r.unit_type) === -1) { errEl.textContent = r.store_id + '：類型須為 總部／門市／央廚（或留空）'; return; }
             seen[r.store_id] = true;
           }
           var diff = computeDiff(function (r) { return r.store_id; }, state.data.stores, rows, function (r) {
-            return r.store_id + ' ' + r.name + '（' + (r.active ? '啟用' : '停用') + (r.brand_color ? '，品牌色 ' + r.brand_color : '') + '）';
+            return r.store_id + ' ' + r.name + '（' + (r.active ? '啟用' : '停用') + (r.brand_color ? '，品牌色 ' + r.brand_color : '') +
+              (r.brand ? '，品牌 ' + r.brand : '') + (r.unit_type ? '，' + r.unit_type : '') + '）';
           });
           showDiffAndSave('門市', diff, [], function () {
             return saveTable_('stores', rows).then(function () {
@@ -9700,6 +10435,33 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           });
         });
         panel.appendChild(saveBtn);
+
+        // dashboard-redesign：一鍵「載入集團單位清單」（只補不改、冪等；只有
+        // 光復正式表才有，乾淨範本不預載）。成功後整頁重讀設定。
+        if (state.data.group_units_available) {
+          var groupBox = el('div', 'group-units-box');
+          groupBox.appendChild(el('div', 'field-hint', '載入集團單位清單：一次補上鼎兆元總部、央廚、墨竹亭總部與六家門市、小辛辣總部，並替 S01 補品牌＝小辛辣、類型＝門市。新單位一律「預設停用」，要開始算損益的單位請在上方表格勾「啟用」後存檔。已存在的（同代號或同名稱）一律跳過，不改既有資料；按幾次都一樣。不會建立任何月份資料。'));
+          var groupBtn = el('button', 'btn-secondary', '載入集團單位清單');
+          groupBtn.type = 'button';
+          groupBtn.id = 'loadGroupUnitsBtn';
+          groupBtn.addEventListener('click', function () {
+            showConfirmModal('載入集團單位清單', function (card) {
+              card.appendChild(el('div', null, '會新增（缺才補，預設停用）：S10 鼎兆元總部、S11 央廚、S20 墨竹亭總部、S21–S26 墨竹亭六店、S30 小辛辣總部；S01 空白的品牌／類型補小辛辣／門市；科目表缺「其他營業收入（手動）」會補上（總部／央廚手填收入用）。'));
+              card.appendChild(el('div', 'field-hint', '尚未存檔的門市修改會被重新載入的資料取代。'));
+            }, function () {
+              return call('loadGroupUnits', {}).then(function (res) {
+                var msg = '已建立 ' + (res.added || []).length + ' 個單位（預設停用，請逐店勾「啟用」後存檔）、補品牌／類型 ' + (res.patched || []).length + ' 個、略過 ' + (res.skipped || []).length + ' 個' +
+                  ((res.accounts_added || []).length ? '；補科目 ' + res.accounts_added.join('、') : '') +
+                  (res.accounts_error ? '；科目未補（' + res.accounts_error + '，請用選單「同步科目範本」）' : '');
+                showToast('已載入集團單位清單（' + msg + '）');
+                state.loading = true;
+                renderShell();
+              });
+            }, { confirmLabel: '確認載入' });
+          });
+          groupBox.appendChild(groupBtn);
+          panel.appendChild(groupBox);
+        }
       }
 
       // ---- 科目 ----------------------------------------------------------
