@@ -725,7 +725,7 @@
     margin: 20px 0 10px;
   }
 
-  .trend-card, .pending-card {
+  .trend-card, .connector-card {
     background: var(--card);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
@@ -763,36 +763,13 @@
     padding: 6px 0;
   }
 
-  .pending-group-title {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--ink-soft);
-    margin: 10px 0 4px;
+  /* dash-slim：儀表板頁首「本月待補 N 項 → 前往填資料」 */
+  .pending-hint { font-size: 14px; margin: 2px 0 10px; color: var(--ink-soft); }
+  .pending-hint-link {
+    display: inline-flex; align-items: center; min-height: var(--tap-min);
+    color: var(--brand-dark); font-weight: 700; text-decoration: none;
   }
-
-  .pending-list { list-style: none; margin: 0; padding: 0; }
-
-  .pending-list li, .pending-list a {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    min-height: var(--tap-min);
-    text-align: left;
-    padding: 8px 4px;
-    border-bottom: 1px solid var(--line);
-    font-size: 14px;
-    background: none;
-    border-left: none;
-    border-right: none;
-    border-top: none;
-    text-decoration: none;
-    color: var(--ink);
-  }
-
-  .pending-list li:last-child, .pending-list a:last-child { border-bottom: none; }
-
-  .pending-list a { color: var(--brand-dark); font-weight: 600; }
-  .pending-list a::after { content: " ›"; }
+  .pending-hint-link:hover { text-decoration: underline; }
 
   .errors-card {
     background: #fff4f2;
@@ -1825,51 +1802,7 @@
     margin-right: 4px;
   }
 
-  /* ---- UI v2：科目明細表格（狀態淡色膠囊：已填／待補／連接器／確認為0） ---- */
-  .accounts-table-card {
-    background: var(--card);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    padding: 14px;
-    margin-bottom: 14px;
-  }
-
-  .status-pill {
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-
-  .status-pill.status-filled { background: #e4f3e8; color: var(--up); }
-  .status-pill.status-pending { background: #fff4f2; color: var(--down); }
-  /* Fable 審查建議 5：原本 #2f6fb0 對 #e6eefb 只有約 4.47:1，壓線沒過
-     4.5:1，改深一階（實測 ≥7:1）。 */
-  .status-pill.status-connector { background: #e6eefb; color: #1d4f8c; }
-  .status-pill.status-zero { background: var(--bg); color: var(--ink-soft); }
-  /* Fable 審查必修 9：手動後備補值的連接器科目，膠囊改顯示「手動」，
-     跟 status-filled 同一套配色（意義上就是「已填」的一種，只是要跟
-     真正的連接器帶入區分開來）。 */
-  .status-pill.status-manual { background: #e4f3e8; color: var(--up); }
-  /* polish-v14：估算（打卡工時／上月日均／固定費攤提…）——跟待補（紅）與
-     已填（綠）都不同的琥珀色，#8a5200 對 #fff3dc 對比約 6.4:1。 */
-  .status-pill.status-estimated,
-  .status-pill.status-estimated_overlay { background: #fff3dc; color: #8a5200; }
-
-  .accounts-table td.num, .accounts-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
-
-  /* ---- item 3：科目明細分頁表格──區塊篩選膠囊／只看待補切換／分頁 ---- */
-  .accounts-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 12px;
-  }
-
+  /* ---- 膠囊篩選（儀表板品牌篩選、填資料類別膠囊共用） ---- */
   .filter-pills {
     display: flex;
     flex-wrap: wrap;
@@ -1893,114 +1826,6 @@
     background: var(--brand-dark); /* Fable 審查建議 5：白字壓 --brand 對比不足，改用 --brand-dark（≥4.5:1） */
     border-color: var(--brand-dark);
     color: #fff;
-  }
-
-  .filter-toggle {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 13px;
-    color: var(--ink-soft);
-    white-space: nowrap;
-    min-height: var(--tap-min); /* Fable 審查建議 4：整條 label 都可點，不是只有 18px 的方框 */
-  }
-
-  .filter-toggle input[type="checkbox"] { width: 20px; height: 20px; }
-
-  .pagination-bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-top: 12px;
-    font-size: 13px;
-    color: var(--ink-soft);
-  }
-
-  .pagination-controls { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
-
-  .page-btn {
-    min-width: var(--tap-min);
-    min-height: var(--tap-min); /* Fable 審查建議 4：原本 32px，補到 44px 觸控下限 */
-    border: 1px solid var(--line);
-    background: #fff;
-    border-radius: 6px;
-    font-size: 13px;
-    color: var(--ink);
-    padding: 0 10px;
-  }
-
-  .page-btn[aria-current="true"] {
-    background: var(--brand-dark); /* Fable 審查建議 5：白字壓 --brand 對比不足，改用 --brand-dark（≥4.5:1） */
-    border-color: var(--brand-dark);
-    color: #fff;
-    font-weight: 700;
-  }
-
-  .page-btn:disabled { opacity: 0.4; }
-
-  .page-size-select {
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 5px 8px;
-    font-size: 13px;
-    background: #fff;
-    color: var(--ink);
-    min-height: var(--tap-min); /* Fable 審查建議 4 */
-  }
-
-  /* 手機：表格轉卡片列表（科目、金額、狀態…各一行，label 用 data-label
-     屬性 + ::before 帶出，屬性值都是靜態欄名常數，不是後端資料，不受
-     innerHTML／XSS 規則限制）。 */
-  @media (max-width: 767px) {
-    .accounts-table { min-width: 0; }
-    .accounts-table thead { display: none; }
-    .accounts-table, .accounts-table tbody, .accounts-table tr, .accounts-table td {
-      display: block;
-      width: 100%;
-    }
-    .accounts-table tr {
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 10px 12px;
-      margin-bottom: 8px;
-    }
-    .accounts-table td {
-      border-bottom: none;
-      padding: 3px 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      text-align: right;
-    }
-    .accounts-table td::before {
-      content: attr(data-label);
-      color: var(--ink-soft);
-      font-weight: 600;
-      flex-shrink: 0;
-      text-align: left;
-    }
-    .accounts-table td.acc-cell-main {
-      font-weight: 700;
-      font-size: 15px;
-      flex-direction: column;
-      align-items: flex-start;
-      text-align: left;
-    }
-    .accounts-table td.acc-cell-main::before { content: none; }
-  }
-
-  /* Fable 審查必修 1：「科目」欄用小字帶出區塊，跟科目名稱同一格但視覺上
-     分兩行——desktop 表格與手機卡片列表共用同一顆 span，各自的
-     acc-cell-main（block／flex-column）會自動把它排到第一行。 */
-  .acc-cell-block {
-    display: block;
-    font-size: 11px;
-    color: var(--ink-soft);
-    font-weight: 600;
-    margin-bottom: 2px;
   }
 
   /* =====================================================================
@@ -2105,7 +1930,7 @@
 
     .hero-card, .profit-card, .expense-card, .account-card, .entry-row,
     .finalize-section, .tpl-summary, .preview-table, .warning-banner,
-    .tpl-editor-body, .accounts-table-card, .chart-card, .pending-card,
+    .tpl-editor-body, .chart-card, .connector-card,
     .trend-card, .settings-panel, .errors-card {
       margin-bottom: 10px;
     }
@@ -2202,24 +2027,23 @@
     }
 
     /* ---- 設定頁的一般資料表格（門市／科目／使用者／連接器…）改卡片
-       列表；.accounts-table（儀表板科目明細）已經有自己一套帶 data-label
-       的卡片版型（見上面既有規則），這裡排除它避免重複套用兩次。 ---- */
-    .settings-panel .data-table:not(.accounts-table) { min-width: 0; }
-    .settings-panel .data-table:not(.accounts-table) thead { display: none; }
-    .settings-panel .data-table:not(.accounts-table),
-    .settings-panel .data-table:not(.accounts-table) tbody,
-    .settings-panel .data-table:not(.accounts-table) tr,
-    .settings-panel .data-table:not(.accounts-table) td {
+       列表。 ---- */
+    .settings-panel .data-table { min-width: 0; }
+    .settings-panel .data-table thead { display: none; }
+    .settings-panel .data-table,
+    .settings-panel .data-table tbody,
+    .settings-panel .data-table tr,
+    .settings-panel .data-table td {
       display: block;
       width: 100%;
     }
-    .settings-panel .data-table:not(.accounts-table) tr {
+    .settings-panel .data-table tr {
       border: 1px solid var(--line);
       border-radius: 10px;
       padding: 8px 10px;
       margin-bottom: 8px;
     }
-    .settings-panel .data-table:not(.accounts-table) td {
+    .settings-panel .data-table td {
       border-bottom: none;
       padding: 4px 0;
     }
@@ -2461,15 +2285,7 @@
     .entry-cat-pills { flex-wrap: wrap; max-width: 100%; }
     .entry-toolbar { flex-direction: column; align-items: stretch; }
   }
-  /* Fable #59：選填狀態、全部門市待補清單逐店折疊、圖例「顯示全部」 */
-  .status-pill.status-optional { background: var(--bg); color: var(--ink-soft); border: 1px dashed var(--line); }
-  .pending-store { border-bottom: 1px solid var(--line); }
-  .pending-store:last-child { border-bottom: none; }
-  .pending-store > summary { cursor: pointer; min-height: var(--tap-min); display: flex; align-items: center; gap: 6px; list-style: none; }
-  .pending-store > summary::-webkit-details-marker { display: none; }
-  .pending-store > summary::before { content: '▸'; font-size: 12px; color: var(--ink-soft); width: 12px; }
-  .pending-store[open] > summary::before { content: '▾'; }
-  .pending-store-body { padding: 0 0 8px 12px; }
+  /* Fable #59：圖例「顯示全部」 */
   .legend-toggle-all { align-self: flex-start; }
   .account-optional-badge { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #eceae8; color: var(--ink-soft); }
 </style>
@@ -6122,13 +5938,15 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
    * 列左邊本月金額、佔營收%、較上月，右邊近 12 個月「每月走勢」折線（手寫
    * inline SVG，無外部圖表庫）。單店一條線；「全部門市」同圖各店各一條線，
    * 資料來自 getTrendMulti（一次取多店），可依品牌篩選、點圖例隱藏。科目
-   * 明細表／連接器帶入／待補清單沿用。文案「NT$ ＋整數」「佔營收 X%」逐字
-   * 保留，e2e 的獨立試算比對字串照舊找得到。
+   * 連接器帶入沿用。文案「NT$ ＋整數」「佔營收 X%」逐字保留，e2e 的獨立試
+   * 算比對字串照舊找得到。
+   *
+   * dash-slim（2026-09-29，Eason）：拿掉「科目明細」表（區塊篩選膠囊／只看
+   * 待補／分頁）與「待補清單」（ALL 逐店折疊）。待補改由「填資料」父層的全
+   * 類別待補總覽負責；儀表板頁首只留一行「本月待補 N 項 → 前往填資料」。
    */
 (function () {
   'use strict';
-
-  var BLOCK_LABELS = ['營收', '食材', '包材', '人事', '可控', '不可控', '營業稅', '營業外收入'];
 
   var ERR_CODE_LABEL = {
     DIV_ZERO: '除以 0',
@@ -6139,8 +5957,6 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
     BAD_AMOUNT: '金額格式錯，已略過該筆',
     BAD_SPLIT: '分攤月數格式錯，已當 1 個月處理'
   };
-
-  var STATUS_LABEL = { optional: '選填', filled: '已填', pending: '待補', connector: '連接器', zero: '確認為0', manual: '手動', estimated: '估算', estimated_overlay: '含估算' };
 
   // ---- 小工具：建 DOM 節點（textContent，不碰 innerHTML）----
   function el(tag, className, text) {
@@ -6715,344 +6531,6 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
     return wrap;
   }
 
-  // ---- UI v2：科目明細表格 ----
-  // 單店視圖有 entries，可以細分「連接器帶入 vs 確認為0 vs 一般已填」；ALL
-  // 視圖 entries 固定回 []（見 gas/api.js apiGetMonth_ 註解），退化成只用
-  // account.mode 判斷連接器、其餘一律當「已填」（沒有明細可以細分來源）。
-  // item 3 預設排序：待補在前，其後依區塊、金額大到小。
-  function compareAccountRows(x, y) {
-    var xPending = x.pending === true, yPending = y.pending === true;
-    if (xPending !== yPending) return xPending ? -1 : 1;
-    if (x.block !== y.block) return x.block < y.block ? -1 : 1;
-    var xAmt = typeof x.amount === 'number' ? x.amount : -Infinity;
-    var yAmt = typeof y.amount === 'number' ? y.amount : -Infinity;
-    if (xAmt !== yAmt) return yAmt - xAmt;
-    return x.acc_id < y.acc_id ? -1 : (x.acc_id > y.acc_id ? 1 : 0);
-  }
-
-  function computeAccountStatusRows(accounts, result, entries, isAllView) {
-    var pendingSet = {};
-    if (isAllView) {
-      Object.keys(result.pending || {}).forEach(function (sid) {
-        (result.pending[sid] || []).forEach(function (accId) { pendingSet[accId] = true; });
-      });
-    } else {
-      (result.pending || []).forEach(function (accId) { pendingSet[accId] = true; });
-    }
-
-    var entriesByAcc = {};
-    (entries || []).forEach(function (e) {
-      if (!e || e.void === true) return;
-      (entriesByAcc[e.acc_id] = entriesByAcc[e.acc_id] || []).push(e);
-    });
-
-    var revenue = safeNum(result.blocks && result.blocks['營收']);
-    // polish-v14：估算科目（人事、食材包材區塊、水電瓦斯、抽成攤提）——跟
-    // 損益表 CSV「是否估算」欄共用 src/csv.js estimateInfoByAcc，兩邊同一組
-    // 科目。ALL 視圖後端不附加估算欄位，自然是空物件。
-    var estimateInfo = (!isAllView && window.PnlCsv && window.PnlCsv.estimateInfoByAcc)
-      ? window.PnlCsv.estimateInfoByAcc(result) : {};
-
-    return accounts
-      .filter(function (a) { return a.active === true; })
-      .map(function (a) {
-        var amount = result.accounts ? result.accounts[a.acc_id] : undefined;
-        var accEntries = entriesByAcc[a.acc_id] || [];
-        var status, source;
-        var est = estimateInfo[a.acc_id];
-        if (est) {
-          // 估算不是真實明細：徽章「估算」（與待補不同色），來源寫估算依據；
-          // 若本月仍無真實明細（在 pending 裡），「只看待補」照樣篩得到。
-          status = est.overlay ? 'estimated_overlay' : 'estimated';
-          source = est.sourceText + (est.blockLevel ? '，計入區塊小計' : '') + (est.overlay ? '（疊加於實際值）' : '');
-        } else if (pendingSet[a.acc_id]) {
-          status = 'pending';
-          source = '—';
-        } else if (a.params && a.params.optional === true &&
-                   (isAllView ? !safeNum(amount) : accEntries.length === 0)) {
-          // Fable #59 輕5：選填科目（engine 本來就不列待補）本月沒有明細時標「選填」，
-          // 不是「已填」。ALL 視圖沒有逐筆明細，用合計金額為 0 判斷。
-          status = 'optional';
-          source = '選填（本月未填）';
-        } else if (accEntries.some(function (e) { return e.source === '確認為0'; })) {
-          status = 'zero';
-          source = '確認為0';
-        } else if (a.mode === '連接器') {
-          // Fable 審查必修 9：連接器科目允許手動後備補值（2026-09-25
-          // Eason 決定），這裡如果實際明細裡一筆「連接器:」來源都沒有
-          // （代表是店長／管理者手動補的，不是真的連接器帶進來的），不能
-          // 掛「連接器」膠囊誤導成自動化資料——改成「手動」膠囊＋來源
-          // 註明「手動（連接器後備）」，跟真正連接器帶入的區分開來。
-          var names = {};
-          accEntries.forEach(function (e) {
-            var src = String(e.source || '');
-            if (src.indexOf('連接器:') === 0) names[src.slice(4)] = true;
-          });
-          var nameList = Object.keys(names);
-          if (nameList.length) {
-            status = 'connector';
-            source = nameList.join('、');
-          } else {
-            status = 'manual';
-            source = '手動（連接器後備）';
-          }
-        } else {
-          status = 'filled';
-          var srcSet = {};
-          accEntries.forEach(function (e) { if (e.source) srcSet[e.source] = true; });
-          var srcList = Object.keys(srcSet);
-          source = srcList.length ? srcList.join('、') : (MODE_LABEL_(a.mode));
-        }
-        return {
-          acc_id: a.acc_id, name: a.name, block: a.block,
-          amount: amount, status: status, source: source, pending: !!pendingSet[a.acc_id],
-          pct: fmtPct1(safeNum(amount), revenue)
-        };
-      })
-      .sort(compareAccountRows);
-  }
-
-  function MODE_LABEL_(mode) {
-    var map = { 手動: '手動', 匯入: '匯入', 固定: '固定', 公式: '公式', 連接器: '連接器' };
-    return map[mode] || (mode || '—');
-  }
-
-  // item 3：科目明細改成分頁表格——上方區塊篩選膠囊（全部／營收／食材／
-  // 包材／人事／可控／不可控／營業外）與「只看待補」切換，下方分頁（每頁
-  // 10 列＋「顯示 X–Y / 共 N」＋每頁筆數下拉）。整個元件是自己的小狀態機
-  // （filter/pendingOnly/page/perPage 都在這個閉包裡），render() 換頁/換
-  // 篩選時只重繪自己，不用整頁 reload。
-  // Fable 審查建議 6：原本漏了「營業稅」這個區塊，科目表裡設成該區塊的
-  // 科目會在「全部」以外的篩選膠囊裡永遠選不到——8 個區塊（BLOCK_LABELS）
-  // 都要有一顆對應的篩選膠囊。
-  var ACCOUNTS_BLOCK_FILTERS = ['全部', '營收', '食材', '包材', '人事', '可控', '不可控', '營業稅', '營業外收入'];
-  var ACCOUNTS_BLOCK_FILTER_LABEL = { 全部: '全部', 營業外收入: '營業外' };
-
-  function buildAccountsTable(container, accounts, result, entries, isAllView) {
-    var allRows = computeAccountStatusRows(accounts, result, entries, isAllView);
-    var state = { block: '全部', pendingOnly: false, page: 1, perPage: 10 };
-
-    function filteredRows() {
-      return allRows.filter(function (r) {
-        if (state.block !== '全部' && r.block !== state.block) return false;
-        // polish-v14：「只看待補」維持待補語意——估算科目本月仍沒有真實明細
-        // （r.pending）也算待補，只是徽章顯示「估算」；已有真實值、另外疊加
-        // 估算的科目（例如抽成公式的固定費攤提）不在待補裡，不列。
-        if (state.pendingOnly && !r.pending) return false;
-        return true;
-      });
-    }
-
-    function render() {
-      container.innerHTML = '';
-
-      // ---- 篩選工具列 ----
-      var toolbar = el('div', 'accounts-toolbar');
-      var pills = el('div', 'filter-pills');
-      ACCOUNTS_BLOCK_FILTERS.forEach(function (b) {
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'filter-pill';
-        btn.setAttribute('aria-pressed', String(state.block === b));
-        btn.textContent = ACCOUNTS_BLOCK_FILTER_LABEL[b] || b;
-        btn.addEventListener('click', function () {
-          state.block = b;
-          state.page = 1;
-          render();
-        });
-        pills.appendChild(btn);
-      });
-      toolbar.appendChild(pills);
-
-      var toggleLabel = document.createElement('label');
-      toggleLabel.className = 'filter-toggle';
-      var toggleInput = document.createElement('input');
-      toggleInput.type = 'checkbox';
-      toggleInput.checked = state.pendingOnly;
-      toggleInput.addEventListener('change', function () {
-        state.pendingOnly = toggleInput.checked;
-        state.page = 1;
-        render();
-      });
-      toggleLabel.appendChild(toggleInput);
-      toggleLabel.appendChild(document.createTextNode('只看待補'));
-      toolbar.appendChild(toggleLabel);
-      container.appendChild(toolbar);
-
-      // ---- 表格（分頁後的當頁列） ----
-      var rows = filteredRows();
-      var totalPages = Math.max(1, Math.ceil(rows.length / state.perPage));
-      if (state.page > totalPages) state.page = totalPages;
-      var startIdx = (state.page - 1) * state.perPage;
-      var pageRows = rows.slice(startIdx, startIdx + state.perPage);
-
-      var wrap = el('div', 'table-wrap');
-      var table = document.createElement('table');
-      table.className = 'data-table accounts-table';
-      // Fable 審查必修 1：表頭原本 6 欄（區塊／科目／來源／金額／佔營收%／
-      // 狀態）但每列實際只渲染 5 個 <td>（區塊跟科目擠在同一格）——欄位
-      // 數對不上，後面的「金額」「佔營收%」「狀態」欄位會全部被誤判成往
-      // 左位移一格。表頭改成跟資料一致的 5 欄，「科目」欄本身用小字帶出
-      // 區塊（不是獨立欄位）。
-      var thead = document.createElement('thead');
-      var trh = document.createElement('tr');
-      ['科目', '來源', '金額', '佔營收%', '狀態'].forEach(function (h, i) {
-        var th = el('th', (i === 2 || i === 3) ? 'num' : null, h);
-        trh.appendChild(th);
-      });
-      thead.appendChild(trh);
-      table.appendChild(thead);
-      var tbody = document.createElement('tbody');
-      if (pageRows.length === 0) {
-        var emptyTr = document.createElement('tr');
-        var emptyTd = el('td', 'acc-cell-main', '沒有符合條件的科目');
-        emptyTd.colSpan = 5;
-        emptyTr.appendChild(emptyTd);
-        tbody.appendChild(emptyTr);
-      }
-      pageRows.forEach(function (r) {
-        var tr = document.createElement('tr');
-        var mainTd = document.createElement('td');
-        mainTd.className = 'acc-cell-main';
-        mainTd.appendChild(el('span', 'acc-cell-block', r.block));
-        mainTd.appendChild(document.createTextNode(r.acc_id + ' ' + r.name));
-        tr.appendChild(mainTd);
-        var sourceTd = el('td', null, r.source);
-        sourceTd.setAttribute('data-label', '來源');
-        tr.appendChild(sourceTd);
-        var amountTd = el('td', 'num', typeof r.amount === 'number' ? 'NT$ ' + fmtInt(r.amount) : '—');
-        amountTd.setAttribute('data-label', '金額');
-        tr.appendChild(amountTd);
-        var pctTd = el('td', 'num', r.pct);
-        pctTd.setAttribute('data-label', '佔營收%');
-        tr.appendChild(pctTd);
-        var statusTd = document.createElement('td');
-        statusTd.setAttribute('data-label', '狀態');
-        var pill = el('span', 'status-pill status-' + r.status, STATUS_LABEL[r.status]);
-        statusTd.appendChild(pill);
-        tr.appendChild(statusTd);
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      wrap.appendChild(table);
-      container.appendChild(wrap);
-
-      // ---- 分頁列：頁碼按鈕＋「顯示 X–Y / 共 N」＋每頁筆數下拉 ----
-      var pagBar = el('div', 'pagination-bar');
-      var rangeStart = rows.length === 0 ? 0 : startIdx + 1;
-      var rangeEnd = Math.min(startIdx + state.perPage, rows.length);
-      pagBar.appendChild(el('div', null, '顯示 ' + rangeStart + '–' + rangeEnd + ' / 共 ' + rows.length));
-
-      var controls = el('div', 'pagination-controls');
-      function pageBtn(label, targetPage, opts) {
-        opts = opts || {};
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'page-btn';
-        btn.textContent = label;
-        if (opts.current) btn.setAttribute('aria-current', 'true');
-        if (opts.disabled) btn.disabled = true;
-        btn.addEventListener('click', function () {
-          state.page = targetPage;
-          render();
-        });
-        return btn;
-      }
-      controls.appendChild(pageBtn('‹', Math.max(1, state.page - 1), { disabled: state.page <= 1 }));
-      var maxBtns = 7;
-      var startPage = Math.max(1, Math.min(state.page - Math.floor(maxBtns / 2), totalPages - maxBtns + 1));
-      startPage = Math.max(1, startPage);
-      var endPage = Math.min(totalPages, startPage + maxBtns - 1);
-      for (var p = startPage; p <= endPage; p++) {
-        controls.appendChild(pageBtn(String(p), p, { current: p === state.page }));
-      }
-      controls.appendChild(pageBtn('›', Math.min(totalPages, state.page + 1), { disabled: state.page >= totalPages }));
-      pagBar.appendChild(controls);
-
-      var perPageWrap = document.createElement('label');
-      perPageWrap.style.display = 'flex';
-      perPageWrap.style.alignItems = 'center';
-      perPageWrap.style.gap = '6px';
-      perPageWrap.appendChild(document.createTextNode('每頁'));
-      var perPageSelect = document.createElement('select');
-      perPageSelect.className = 'page-size-select';
-      [10, 20, 50].forEach(function (n) {
-        var opt = document.createElement('option');
-        opt.value = String(n);
-        opt.textContent = String(n);
-        if (n === state.perPage) opt.selected = true;
-        perPageSelect.appendChild(opt);
-      });
-      perPageSelect.addEventListener('change', function () {
-        state.perPage = parseInt(perPageSelect.value, 10) || 10;
-        state.page = 1;
-        render();
-      });
-      perPageWrap.appendChild(perPageSelect);
-      perPageWrap.appendChild(document.createTextNode('筆'));
-      pagBar.appendChild(perPageWrap);
-
-      container.appendChild(pagBar);
-    }
-
-    render();
-  }
-
-  // ---- 待補清單 ----
-  function renderPendingList(container, pending, storeLabelFn, isAllView, canEdit, opts) {
-    container.innerHTML = '';
-    function renderGroup(accIds) {
-      if (!accIds || accIds.length === 0) {
-        container.appendChild(el('div', 'pending-empty', '沒有待補科目'));
-        return;
-      }
-      var ul = el('ul', 'pending-list');
-      accIds.forEach(function (accId) {
-        var item = canEdit ? document.createElement('a') : document.createElement('li');
-        if (canEdit) item.href = '#entry/' + accId; // 填資料頁（#9）尚未上線，先佔位；檢視者完全不渲染這個連結。
-        item.textContent = accId + ' ' + accountName(accId);
-        ul.appendChild(item);
-      });
-      container.appendChild(ul);
-    }
-
-    if (!isAllView) {
-      renderGroup(pending);
-      return;
-    }
-    var storeIds = Object.keys(pending || {});
-    if (storeIds.length === 0) {
-      container.appendChild(el('div', 'pending-empty', '沒有待補科目'));
-      return;
-    }
-    // Fable #59 中1：全部門市時逐店可折疊（details／summary＋筆數），只有本月
-    // 已經有明細的店預設展開，其餘收合，整張卡的高度才不會被十幾家店撐爆。
-    var anyPending = false;
-    storeIds.forEach(function (sid) {
-      var list = pending[sid] || [];
-      if (list.length === 0) return;
-      anyPending = true;
-      var det = document.createElement('details');
-      det.className = 'pending-store';
-      det.open = !!(opts && opts.hasEntries && opts.hasEntries(sid));
-      var sum = document.createElement('summary');
-      sum.id = 'pendingStore-' + sid;
-      sum.className = 'pending-group-title';
-      sum.textContent = storeLabelFn(sid) + '（待補 ' + list.length + '）';
-      det.appendChild(sum);
-      var inner = el('div', 'pending-store-body');
-      det.appendChild(inner);
-      container.appendChild(det);
-      var saved = container;
-      container = inner;
-      renderGroup(list);
-      container = saved;
-    });
-    if (!anyPending) {
-      container.appendChild(el('div', 'pending-empty', '沒有待補科目'));
-    }
-  }
-
   // ---- 主渲染 ----
   window.renderDashboard = function renderDashboard(root) {
     var App = window.App;
@@ -7078,6 +6556,7 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       '</select></div>' +
       '<div class="empty-state hidden" id="noStoreHint"></div>' +
       '<div class="month-status" id="monthStatus"></div>' +
+      '<div class="pending-hint hidden" id="pendingHint"></div>' +
       '<div class="retry-bar hidden" id="retryBar"></div>' +
       '<div id="dashBody"></div>';
     // ⚠ 上面這行 innerHTML 是純靜態字串（沒有任何變數插值），不是 XSS
@@ -7236,6 +6715,7 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       }
 
       var emptyMonth = monthIsEmpty(data, isAll);
+      renderPendingHint(emptyMonth ? null : result, isAll, requestStore, requestMonth);
       // Fable 審查 #3：這個月完全沒建草稿 → 空狀態，不畫待補／上月比較；
       // 走勢仍然畫（那是歷史脈絡，跟「這個月」是否建草稿是兩件事）。
       if (emptyMonth) {
@@ -7308,17 +6788,11 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
         dashBody.appendChild(errCard);
       }
 
-      // ---- 科目明細表格（沿用既有功能；「全部門市」時為全部門市合計，不受品牌篩選影響） ----
-      dashBody.appendChild(el('div', 'section-title', '科目明細'));
-      var accountsCard = el('div', 'accounts-table-card');
-      dashBody.appendChild(accountsCard);
-      buildAccountsTable(accountsCard, window.App.accounts || [], result, data.entries || [], isAll);
-
       // T16：連接器帶入的科目明細——逐來源顯示。一律 textContent。
       var connRows = connectorSourceRows(data.entries || []);
       if (connRows.length) {
         dashBody.appendChild(el('div', 'section-title', '連接器帶入'));
-        var connCard = el('div', 'pending-card');
+        var connCard = el('div', 'connector-card');
         connRows.forEach(function (r) {
           var line = el('div', 'connector-source-row');
           line.appendChild(el('div', null, r.acc_id + ' ' + accountName(r.acc_id)));
@@ -7327,18 +6801,49 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
         });
         dashBody.appendChild(connCard);
       }
+    }
 
-      // 待補清單
-      dashBody.appendChild(el('div', 'section-title', '待補清單'));
-      var pendingCard = el('div', 'pending-card');
-      renderPendingList(pendingCard, result.pending, storeLabel, isAll, canEdit, {
-        hasEntries: function (sid) {
-          var rows = multi && multi.stores && multi.stores[sid];
-          var row = rows && rows.filter(function (r) { return r.month === requestMonth; })[0];
-          return !!(row && row.has_entries);
-        }
+    // dash-slim：頁首一行「本月待補 N 項 → 前往填資料」。單店＝result.pending
+    // 長度；全部合計＝各店加總。0 項或空月份不顯示。填資料頁只給管理者／填寫者
+    // （含限定門市的填寫者），這兩種角色才有連結；檢視者只看到數字，不渲染連結
+    // （跟頁籤「角色不對就整個不渲染」同一原則）。點連結＝切到填資料父層
+    // （待補總覽），並帶目前的門市（單店時）與月份過去。
+    function countPending(result, isAll) {
+      if (!result || !result.pending) return 0;
+      if (!isAll) return Array.isArray(result.pending) ? result.pending.length : 0;
+      return Object.keys(result.pending).reduce(function (n, sid) {
+        var list = result.pending[sid];
+        return n + (Array.isArray(list) ? list.length : 0);
+      }, 0);
+    }
+
+    function renderPendingHint(result, isAll, requestStore, requestMonth) {
+      var hint = document.getElementById('pendingHint');
+      if (!hint) return;
+      hint.textContent = '';
+      var n = countPending(result, isAll);
+      if (!n) {
+        hint.classList.add('hidden');
+        return;
+      }
+      hint.classList.remove('hidden');
+      // 全部合計時 N 是各店加總，但填資料頁一次只看一家店——連結過去看到的數字
+      // 會對不上，所以 ALL 只顯示「各店合計」數字、不給連結（Fable 審查 PR #63）。
+      var text = (isAll ? '本月各店合計待補 ' : '本月待補 ') + n + ' 項';
+      if (isAll || !canEdit || typeof window.PnlSelectEntryCategory !== 'function') {
+        hint.appendChild(el('span', null, text));
+        return;
+      }
+      var link = el('a', 'pending-hint-link', text + ' → 前往填資料');
+      link.id = 'pendingHintLink';
+      link.href = '#';
+      link.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        if (!isAll) App.entryLastStore = requestStore;
+        App.lastMonth = requestMonth;
+        window.PnlSelectEntryCategory(window.PnlEntryPendingKey || 'pending');
       });
-      dashBody.appendChild(pendingCard);
+      hint.appendChild(link);
     }
 
     // ---- 六列項目卡 ----
@@ -7438,7 +6943,7 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
           bar.appendChild(allBtn);
         }
         if (brandFilter !== '全部') {
-          bar.appendChild(el('div', 'mismatch-note', '＊上方六列只含「' + brandFilter + '」的單位；下方科目明細仍是全部門市合計。'));
+          bar.appendChild(el('div', 'mismatch-note', '＊上方六列只含「' + brandFilter + '」的單位。'));
         }
         section.appendChild(bar);
       }
@@ -7575,7 +7080,7 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       }
     }
 
-    // 視窗寬度改變時只重畫圖（不重抓資料、不動科目明細表的篩選／分頁）。
+    // 視窗寬度改變時只重畫圖（不重抓資料）。
     var lastChartWidth = 0;
     function onDashResize() {
       if (!chartCtx || !document.body.contains(chartCtx.section)) return;
@@ -7678,7 +7183,7 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
         if (seq !== loadSeq) return; // 使用者在回應回來前又切了一次，這筆回應已經過期
         if (!document.body.contains(dashBody)) return;
         hasRenderedOnce = true;
-        // 快取內容跟新抓的一模一樣就不重畫（保留科目明細表的篩選／分頁）。
+        // 快取內容跟新抓的一模一樣就不重畫（保留品牌篩選／圖例狀態、避免閃動）。
         if (!(cached && JSON.stringify(cached.month) === JSON.stringify(results[0]) &&
               JSON.stringify(cached.trend) === JSON.stringify(results[1]) &&
               JSON.stringify(cached.multi || null) === JSON.stringify(results[2]))) {
