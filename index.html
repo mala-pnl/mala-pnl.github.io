@@ -2288,6 +2288,27 @@
   /* Fable #59：圖例「顯示全部」 */
   .legend-toggle-all { align-self: flex-start; }
   .account-optional-badge { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #eceae8; color: var(--ink-soft); }
+  /* speed2：登入頁「在這台裝置記住 7 天」 */
+  .login-card label.login-remember {
+    display: flex; align-items: center; gap: 8px; min-height: var(--tap-min);
+    font-size: 14px; color: var(--ink); cursor: pointer;
+  }
+  .login-remember input[type="checkbox"] { width: 20px; height: 20px; margin: 0; accent-color: var(--brand-dark); }
+  /* speed2：儀表板骨架（資料回來前佔位，六列卡片與真卡片同一個 .metric-row 版型／同高） */
+  .skel {
+    display: block; border-radius: 6px;
+    background: linear-gradient(90deg, #ecebea 0%, #f5f4f3 40%, #ecebea 80%);
+    background-size: 200% 100%;
+    animation: pnl-skel 1.2s ease-in-out infinite;
+  }
+  @keyframes pnl-skel { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+  @media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+  .skel-title { width: 7em; height: 16px; }
+  .skel-value { width: 11em; max-width: 100%; height: 30px; }
+  .skel-line { width: 8em; height: 13px; }
+  .skel-chart { width: 100%; height: 196px; }
+  @media (max-width: 479px) { .skel-chart { height: 168px; } }
+  .metric-row-skeleton .metric-title { color: var(--ink-soft); }
 </style>
 
 </head>
@@ -4114,6 +4135,149 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       try { window.sessionStorage.removeItem(key); } catch (e) { /* 忽略 */ }
     }
 
+    // ---- speed2（2026-09-30，Eason：「登入一次記住 7 天」）：登入狀態 ----
+    // 一顆 JSON（auth blob）＝{v, token, session:{name,role,stores}, shell, saved_at}：
+    //   - 勾「在這台裝置記住 7 天」→ 存 localStorage（關掉瀏覽器隔天打開直接進系統）；
+    //     不勾 → 存 sessionStorage（關掉分頁就要重登，同舊行為）。
+    //   - 鍵帶後端（mala_pnl_auth@<exec id>｜@gas），A 後端的 token 永遠不會被送到 B 後端。
+    //   - shell＝非財務的外殼資料（系統名稱／主色、門市清單含品牌／類型／啟用、可看
+    //     全部合計、上次選的門市月份），跟 token 放同一顆，token 換了／清了就一起沒了，
+    //     不會跨帳號殘留。**財務數字一律不落地**（沿用 PR #53，只在記憶體 PnlDashCache）。
+    //   - 不存通行碼、不存雜湊；登出、AUTH 失敗、改通行碼後舊 token 失效（回 AUTH）
+    //     都走 showLogin() → clearAuth_()。
+    var AUTH_BLOB_VERSION = 1;
+    var REMEMBER_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 跟後端 TOKEN_TTL_MS_ 一致
+    function localGet_(key) {
+      try { return window.localStorage.getItem(key); } catch (e) { return null; }
+    }
+    function localSet_(key, val) {
+      try { window.localStorage.setItem(key, val); return true; } catch (e) { return false; }
+    }
+    function localRemove_(key) {
+      try { window.localStorage.removeItem(key); } catch (e) { /* 忽略 */ }
+    }
+    function authKey_() {
+      if (hasAppsScriptRunner()) return STORAGE_PREFIX + 'auth@gas';
+      var url = apiUrlState && apiUrlState.status === 'ready' ? apiUrlState.url : null;
+      return url ? STORAGE_PREFIX + 'auth@' + execIdOf(url) : null;
+    }
+    function parseAuthBlob_(raw) {
+      if (!raw) return null;
+      try {
+        var b = JSON.parse(raw);
+        if (!b || b.v !== AUTH_BLOB_VERSION || typeof b.token !== 'string' || !b.token) return null;
+        if (!b.session || typeof b.session.name !== 'string' || typeof b.session.role !== 'string') return null;
+        if (typeof b.saved_at !== 'number' || Date.now() - b.saved_at > REMEMBER_TTL_MS) return null;
+        return b;
+      } catch (e) {
+        return null;
+      }
+    }
+    // 回 {blob, persistent} 或 null。localStorage 優先（記住裝置）。
+    function readAuth_() {
+      var key = authKey_();
+      if (!key) return null;
+      var fromLocal = parseAuthBlob_(localGet_(key));
+      if (fromLocal) return { blob: fromLocal, persistent: true };
+      localRemove_(key); // 壞掉／過期的一律清掉
+      var fromSession = parseAuthBlob_(storageGet(key));
+      if (fromSession) return { blob: fromSession, persistent: false };
+      storageRemove(key);
+      return null;
+    }
+    function writeAuth_(blob, persistent) {
+      var key = authKey_();
+      if (!key) return;
+      var json = JSON.stringify(blob);
+      if (persistent && localSet_(key, json)) {
+        storageRemove(key);
+        return;
+      }
+      storageSet(key, json);
+      localRemove_(key);
+    }
+    function clearAuth_() {
+      var key = authKey_();
+      if (key) {
+        localRemove_(key);
+        storageRemove(key);
+      }
+      // 舊版（speed2 之前）的 sessionStorage 鍵一併清掉。
+      storageRemove(TOKEN_KEY);
+      storageRemove(SESSION_KEY);
+    }
+    // 外殼資料白名單：只挑非財務欄位、型別不對一律丟掉（XSS 面：之後一律 textContent 顯示）。
+    var HEX_RE_ = /^#[0-9a-fA-F]{6}$/;
+    function sanitizeShellStores_(stores) {
+      if (!Array.isArray(stores)) return [];
+      return stores.filter(function (st) { return st && typeof st.store_id === 'string' && st.store_id; }).slice(0, 200).map(function (st) {
+        return {
+          store_id: st.store_id,
+          name: typeof st.name === 'string' ? st.name : '',
+          active: st.active !== false,
+          brand: typeof st.brand === 'string' ? st.brand : '',
+          brand_color: HEX_RE_.test(st.brand_color || '') ? st.brand_color : '',
+          unit_type: typeof st.unit_type === 'string' ? st.unit_type : ''
+        };
+      });
+    }
+    function sanitizeShell_(shell) {
+      shell = shell || {};
+      var sys = shell.system || {};
+      var out = {
+        system: {},
+        stores: sanitizeShellStores_(shell.stores),
+        can_see_all: typeof shell.can_see_all === 'boolean' ? shell.can_see_all : undefined,
+        last_store: typeof shell.last_store === 'string' ? shell.last_store : '',
+        last_month: /^\d{4}-(0[1-9]|1[0-2])$/.test(shell.last_month || '') ? shell.last_month : ''
+      };
+      if (typeof sys['系統名稱'] === 'string') out.system['系統名稱'] = sys['系統名稱'].slice(0, 100);
+      if (HEX_RE_.test(sys['主色'] || '')) out.system['主色'] = sys['主色'];
+      return out;
+    }
+    // 目前登入是否記住這台裝置（登入當下的勾選；改通行碼換 token 時沿用）。
+    var rememberDevice = true;
+    // Fable #65 中：寫入前先看儲存裡的 token——別的分頁已經換成另一把（登出後換人登入）
+    // 就不覆寫（force＝登入／改通行碼當下，本來就是要換成新 token）。
+    function storedToken_(persistent) {
+      var key = authKey_();
+      if (!key) return null;
+      var b = parseAuthBlob_(persistent ? localGet_(key) : storageGet(key));
+      return b ? b.token : null;
+    }
+    function saveAuthNow_(force) {
+      if (!App.token) return;
+      // 非登入當下只「更新自己那一顆」：儲存裡不是這把 token（別的分頁換人）或已經被移除
+      // （別的分頁登出）都不寫——不能把已登出的登入寫回去。
+      if (!force && storedToken_(rememberDevice) !== App.token) return;
+      writeAuth_({
+        v: AUTH_BLOB_VERSION,
+        token: App.token,
+        session: { name: App.name, role: App.role, stores: App.stores || [] },
+        shell: App.shellCache ? sanitizeShell_(App.shellCache) : null,
+        saved_at: App.authSavedAt || (App.authSavedAt = Date.now())
+      }, rememberDevice);
+    }
+    // 外殼資料更新（getSettings 回來、切門市／月份）：只在 token 沒換的前提下寫。
+    function updateShellCache_(patch, tokenAtRequest) {
+      if (!App.token || (tokenAtRequest && tokenAtRequest !== App.token)) return;
+      var cur = App.shellCache || {};
+      var next = {};
+      Object.keys(cur).forEach(function (k) { next[k] = cur[k]; });
+      Object.keys(patch || {}).forEach(function (k) { next[k] = patch[k]; });
+      App.shellCache = sanitizeShell_(next);
+      saveAuthNow_();
+    }
+    window.PnlShellCache = {
+      get: function () { return App.token ? (App.shellCache || null) : null; },
+      rememberSelection: function (store, month) {
+        var patch = {};
+        if (typeof store === 'string') patch.last_store = store;
+        if (typeof month === 'string') patch.last_month = month;
+        updateShellCache_(patch);
+      }
+    };
+
     // ---- API_URL 白名單（Fable 對抗審查必修 2）--------------------------
     // 只接受 https://script.google.com/macros/s/<id>/exec 這個格式——這是
     // 唯一會被送出資料的目的地，格式錯就是設定錯誤／可能被竄改的網址，不能
@@ -5026,9 +5190,13 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       el.classList.remove('hidden');
     }
 
-    function showLogin(message) {
-      storageRemove(TOKEN_KEY);
-      storageRemove(SESSION_KEY);
+    // opts.keepStorage：別的分頁已經登出／換人（storage 事件）時，本分頁只回登入頁、
+    // 不動儲存——儲存裡可能已經是另一個人剛登入的 token，清掉會把他也踢出去。
+    function showLogin(message, opts) {
+      if (!(opts && opts.keepStorage)) clearAuth_(); // speed2：登出／AUTH 失敗一律清掉 localStorage／sessionStorage 的登入與外殼資料
+      App.shellCache = null;
+      App.authSavedAt = null;
+      settingsShared = null;
       document.body.classList.remove('has-bottom-nav'); // 登出時清掉，避免殘留影響登入畫面
       if (window.PnlLoading) window.PnlLoading.reset();
       App.entryCategory = null;
@@ -5044,6 +5212,8 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       App.stores = [];
       App.canSeeAll = undefined; // 不讓上一個帳號的「可看全部合計」殘留給下一個帳號
       resetTheme_(); // store-theme：登出／AUTH 回登入前品牌色
+      App.system = {};
+      applyBranding({}); // Fable #65 輕：系統名稱／標題／主色也回登入前預設（不留上一個人記住的外殼）
       invalidateDashCache_(); // speed-switch：登出／AUTH 一律清空讀取快取
       pendingOldPass = null; // T20：AUTH／登出當下可能正卡在強制換碼畫面，清掉殘留狀態
       mustChangeMode = null;
@@ -5088,9 +5258,32 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       msgEl.textContent = '本頁將連線到非預設後端（' + idPrefix + '…），若不是你們公司自己的系統請勿輸入通行碼。';
     }
 
-    function logout(message) {
-      showLogin(message || '');
+    function logout(message, opts) {
+      showLogin(message || '', opts);
     }
+    // Fable #64 中2：使用者自己按「登出」→ 後端撤銷這一把 token（記住 7 天時被偷或留在
+    // 別處也不能再用）；本人其他裝置不受影響。請求失敗不擋前端登出。
+    function revokeThisToken_() {
+      if (!App.token) return;
+      try {
+        // 直接走傳輸層，不經 call()：登出請求晚回來時不能去清下一位使用者的讀取快取。
+        callTransport_('logout', {}).catch(function () { /* 不擋登出 */ });
+      } catch (e) { /* 不擋登出 */ }
+    }
+    // Fable #65 中：多分頁——別的分頁登出（鍵被移除）或換了另一把 token（換人登入），
+    // 這個分頁立刻回登入頁，不能繼續拿舊帳號的畫面／token 操作。
+    function onAuthStorageChange_(ev) {
+      var key = authKey_();
+      if (!key || !App.token) return;
+      if (ev && ev.key !== null && ev.key !== undefined && ev.key !== key) return;
+      var saved = readAuth_();
+      if (!saved || saved.blob.token !== App.token) {
+        App.token = null; // 先斷開，晚到的回應不再寫入
+        logout('這台裝置已在其他分頁登出或切換帳號，請重新登入', { keepStorage: true });
+      }
+    }
+    window.__pnlOnAuthStorageChange = onAuthStorageChange_;
+    try { window.addEventListener('storage', onAuthStorageChange_); } catch (e) { /* 忽略 */ }
     window.logout = logout;
 
     // ---- 登入頁＋外殼 DOM（一次性建立，避免每次登入重繪整個 <body>）----
@@ -5112,6 +5305,8 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
         '      <label for="loginPass">通行碼</label>' +
         '      <input type="password" id="loginPass" name="pass" autocomplete="current-password" required>' +
         '    </div>' +
+        '    <label class="login-remember" for="loginRemember"><input type="checkbox" id="loginRemember" checked> 在這台裝置記住 7 天</label>' +
+        '    <div class="field-hint" id="loginRememberHint">公用或別人的電腦請取消勾選；登出、改通行碼或管理者「登出所有裝置」都會立即失效</div>' +
         '    <button type="submit" class="btn-primary" id="loginSubmit"><span id="loginSubmitText">登入</span></button>' +
         '    <div class="login-error" id="loginError" role="alert"></div>' +
         '    <button type="button" class="btn-link login-register-link" id="loginToRegister">拿到邀請碼了？用邀請碼註冊</button>' +
@@ -5258,7 +5453,7 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       });
       document.getElementById('logoutIcon').appendChild(window.PnlIcon.logout());
       document.getElementById('changePassIcon').appendChild(window.PnlIcon.key());
-      document.getElementById('logoutBtn').addEventListener('click', function () { logout(''); });
+      document.getElementById('logoutBtn').addEventListener('click', function () { revokeThisToken_(); logout(''); });
       document.getElementById('backendConfirmYes').addEventListener('click', function () {
         confirmBackend();
         boot();
@@ -5306,12 +5501,14 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
     // App 與 sessionStorage——changeMyPasscode 成功後也會呼叫這支，用同一套
     // 邏輯把新 token 換上去，兩個入口不寫兩份會漂移的邏輯。
     function applyLoginSuccess(data) {
+      var sameUser = App.name === data.name && App.token; // 改通行碼換 token：同一人，外殼資料沿用
       App.token = data.token;
       App.name = data.name;
       App.role = data.role;
       App.stores = data.stores || [];
-      storageSet(TOKEN_KEY, data.token);
-      storageSet(SESSION_KEY, JSON.stringify({ name: data.name, role: data.role, stores: data.stores }));
+      App.authSavedAt = Date.now();
+      if (!sameUser) App.shellCache = null;
+      saveAuthNow_(true);
     }
 
     // T20：登入時如果剛好用的是需更換的臨時通行碼，login 回應帶
@@ -5327,6 +5524,8 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       ev.preventDefault();
       var name = document.getElementById('loginName').value;
       var pass = document.getElementById('loginPass').value;
+      var rememberEl = document.getElementById('loginRemember');
+      rememberDevice = !rememberEl || !!rememberEl.checked;
       var errEl = document.getElementById('loginError');
       errEl.textContent = '';
       setLoginSubmitting(true);
@@ -5463,6 +5662,8 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
         return;
       }
       setRegisterSubmitting(true);
+      var rememberEl = document.getElementById('loginRemember');
+      rememberDevice = !rememberEl || !!rememberEl.checked;
       call('registerWithInvite', { code: c.rawCode, name: c.rawName, pass: c.pass })
         .then(function (data) {
           applyLoginSuccess(data);
@@ -5847,26 +6048,65 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       if (roleEl) roleEl.textContent = '（' + App.role + '）';
     }
 
+    // speed2：getSettings 共用——外殼（enterApp）與儀表板第一次進來原本各打一次，
+    // 改成共用同一個請求：同一把 token、期間沒有任何寫入（PnlDashCache.generation
+    // 沒變）、還在路上或 5 秒內回來的，就直接沿用。設定頁存檔等寫入會讓
+    // generation +1，之後一定重抓。
+    var SETTINGS_SHARE_MS = 5000;
+    var settingsShared = null; // {token, gen, at, promise}
+    function getSettingsShared() {
+      var gen = window.PnlDashCache.generation;
+      if (settingsShared && settingsShared.token === App.token && settingsShared.gen === gen &&
+          (!settingsShared.at || Date.now() - settingsShared.at < SETTINGS_SHARE_MS)) {
+        return settingsShared.promise;
+      }
+      var entry = { token: App.token, gen: gen, at: 0, promise: null };
+      entry.promise = call('getSettings', {}).then(function (data) {
+        entry.at = Date.now();
+        return data;
+      }, function (err) {
+        if (settingsShared === entry) settingsShared = null; // 失敗不共用，下一次重打
+        throw err;
+      });
+      settingsShared = entry;
+      return entry.promise;
+    }
+    window.PnlGetSettings = getSettingsShared;
+
+    // speed2：用外殼資料（getSettings 回來的，或 localStorage 記住的）套品牌／主題。
+    function applyShellData_(data) {
+      if (data.can_see_all !== undefined) App.canSeeAll = !!data.can_see_all;
+      else if (App.canSeeAll === undefined) App.canSeeAll = App.role !== '填寫者';
+      THEME.stores = {};
+      applyBranding(data.system || {});
+      setThemeStores(data.stores || []);
+      updateTopbarUser();
+    }
+
     function enterApp() {
       renderShellDom();
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('registerScreen').classList.add('hidden');
       document.getElementById('appShell').classList.remove('hidden');
+      // speed2：有記住的外殼資料就先畫品牌／主題，不等 getSettings。
+      if (App.shellCache) applyShellData_(App.shellCache);
       updateTopbarUser();
       setAppState('app');
       renderTabbar();
       renderBottomNav();
       renderActiveTab();
 
-      call('getSettings', {})
+      var tokenAtRequest = App.token;
+      getSettingsShared()
         .then(function (data) {
+          if (tokenAtRequest !== App.token) return; // 途中登出／換人
           App.accounts = data.accounts || [];
-          App.canSeeAll = data.can_see_all !== undefined ? !!data.can_see_all : (App.role !== '填寫者');
-          THEME.stores = {};
-          applyBranding(data.system);
-          setThemeStores(data.stores);
-          // system 名稱／主色可能在登入後才第一次知道正確值，重繪一次頂列。
-          updateTopbarUser();
+          // 後端為準：跟記住的外殼資料不一致就靜默更新（畫面＋localStorage）。
+          var before = JSON.stringify(App.shellCache ? sanitizeShell_(App.shellCache) : null);
+          updateShellCache_({ system: data.system || {}, stores: data.stores || [], can_see_all: data.can_see_all !== undefined ? !!data.can_see_all : (App.role !== '填寫者') }, tokenAtRequest);
+          var after = JSON.stringify(sanitizeShell_(App.shellCache));
+          if (before !== after || !App.system || !Object.keys(App.system).length) applyShellData_(data);
+          else App.system = data.system || App.system;
         })
         .catch(handleApiError);
     }
@@ -5891,22 +6131,33 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
         renderBackendConfirm();
         return;
       }
-      var savedToken = storageGet(TOKEN_KEY);
-      var savedSession = storageGet(SESSION_KEY);
-      if (!savedToken || !savedSession) {
-        showLogin('');
-        return;
+      // speed2：記住的登入（localStorage）或這個分頁的登入（sessionStorage）→ 直接進系統，
+      // 外殼先畫、資料區骨架，token 失效（過期／改通行碼／登出所有裝置）時第一個請求
+      // 回 AUTH → showLogin() 清掉。
+      var saved = readAuth_();
+      if (!saved) {
+        // 舊版（speed2 之前）sessionStorage 的登入：搬到新格式（只在同一個分頁內有效）。
+        var legacyToken = storageGet(TOKEN_KEY);
+        var legacySession = storageGet(SESSION_KEY);
+        storageRemove(TOKEN_KEY);
+        storageRemove(SESSION_KEY);
+        var legacy = null;
+        try { legacy = legacyToken && legacySession ? JSON.parse(legacySession) : null; } catch (e) { legacy = null; }
+        if (!legacy || typeof legacy.name !== 'string') {
+          showLogin('');
+          return;
+        }
+        saved = { persistent: false, legacy: true, blob: { token: legacyToken, session: legacy, shell: null, saved_at: Date.now() } };
       }
-      try {
-        var session = JSON.parse(savedSession);
-        App.token = savedToken;
-        App.name = session.name;
-        App.role = session.role;
-        App.stores = session.stores || [];
-      } catch (e) {
-        showLogin('');
-        return;
-      }
+      rememberDevice = saved.persistent;
+      App.token = saved.blob.token;
+      App.name = saved.blob.session.name;
+      App.role = saved.blob.session.role;
+      App.stores = Array.isArray(saved.blob.session.stores) ? saved.blob.session.stores : [];
+      App.authSavedAt = saved.blob.saved_at;
+      App.shellCache = saved.blob.shell ? sanitizeShell_(saved.blob.shell) : null;
+      if (App.shellCache && App.shellCache.last_month && !App.lastMonth) App.lastMonth = App.shellCache.last_month;
+      if (saved.legacy) saveAuthNow_(true); // 只有舊版搬移要寫；一般開機不重寫（避免把別的分頁剛登出的登入寫回去）
       enterApp();
     }
 
@@ -6644,7 +6895,44 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       retryBar.classList.remove('hidden');
     }
 
+    // speed2：骨架畫面——資料回來前六列卡片先佔位（與真卡片同一個 .metric-row
+    // 版型、同樣的標題與圖高），回來後 renderBody 在同一個同步步驟裡整塊換掉，
+    // 不會先空白再出現（無閃爍）。只用固定字串（METRICS 標題），不碰任何資料。
+    function clearSkeletonMarks() {
+      dashBody.removeAttribute('aria-busy');
+      dashBody.removeAttribute('data-skeleton');
+    }
+    function renderSkeleton() {
+      dashBody.innerHTML = '';
+      var section = el('div', 'metric-section metric-skeleton');
+      section.setAttribute('aria-hidden', 'true');
+      METRICS.forEach(function (metric) {
+        var card = el('div', 'metric-row metric-row-skeleton');
+        card.setAttribute('data-metric', metric.key);
+        var head = el('div', 'metric-head');
+        head.appendChild(el('div', 'metric-title', metric.title));
+        head.appendChild(el('span', 'skel skel-value'));
+        head.appendChild(el('span', 'skel skel-line'));
+        head.appendChild(el('span', 'skel skel-line'));
+        card.appendChild(head);
+        var chartBox = el('div', 'metric-chart-box');
+        chartBox.appendChild(el('div', 'metric-chart-title', '每月走勢'));
+        chartBox.appendChild(el('span', 'skel skel-chart'));
+        card.appendChild(chartBox);
+        section.appendChild(card);
+      });
+      dashBody.appendChild(section);
+      dashBody.setAttribute('aria-busy', 'true');
+      dashBody.setAttribute('data-skeleton', '1');
+      var statusEl = document.getElementById('monthStatus');
+      if (statusEl) statusEl.textContent = '讀取中…';
+      var hintEl = document.getElementById('pendingHint');
+      if (hintEl) { hintEl.classList.add('hidden'); hintEl.textContent = ''; }
+    }
+    window.__pnlDashSkeletonForTest = renderSkeleton;
+
     function renderEmptyState() {
+      clearSkeletonMarks();
       dashBody.innerHTML = '';
       dashBody.appendChild(el('div', 'empty-state', '本月尚未建立草稿'));
     }
@@ -6676,6 +6964,7 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       // getMonth）；「下載明細 CSV」仍然要另外呼叫 exportEntries（含作廢、
       // ALL 逐筆），這裡只存 store_id/month 給它用。空月份（monthIsEmpty）
       // 也照樣記下來、照樣可以下載（下載出一份只有表頭/小計 0 的 CSV）。
+      clearSkeletonMarks();
       lastLoaded = { store_id: requestStore, month: requestMonth, result: result, entries: data.entries || [] };
       dashBody.setAttribute('data-rendered', requestStore + '|' + requestMonth); // speed-switch：e2e 量測切換到顯示的時間用
       downloadPnlCsvBtn.disabled = false;
@@ -7169,15 +7458,20 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
         renderBody(cached.month, cached.trend, requestStore, requestMonth, cached.multi);
         setRefreshing(true);
         setDownloadsEnabled(false);
-      } else if (!hasRenderedOnce) {
-        dashBody.innerHTML = '';
+      } else {
+        // speed2：沒有快取 → 骨架佔位（取代整頁「讀取中⋯⋯」遮罩；儀表板有骨架可畫，
+        // 不再鎖畫面）。看門狗沿用 25 秒：太久就顯示重試，骨架保留。
+        renderSkeleton();
       }
-      // entry-menu：沒有快取可立即顯示 → 整頁讀取中遮罩；有快取沿用「更新中…」不遮罩。
-      var loadingToken = (!cached && window.PnlLoading) ? window.PnlLoading.show(function () {
-        if (seq === loadSeq && document.body.contains(dashBody)) showRetry('讀取太久，已解除畫面鎖定，請按重試', load);
-      }) : null;
-      function loadDone() { if (loadingToken !== null) window.PnlLoading.hide(loadingToken); }
-      fetchPair(requestStore, requestMonth).then(function (results) {
+      if (window.PnlShellCache) window.PnlShellCache.rememberSelection(requestStore, requestMonth);
+      var watchdogMs = typeof window.__PNL_LOADING_WATCHDOG_MS === 'number' ? window.__PNL_LOADING_WATCHDOG_MS : 25000;
+      var watchdog = cached ? null : setTimeout(function () {
+        if (seq === loadSeq && document.body.contains(dashBody)) showRetry('讀取太久，請按重試', load);
+      }, watchdogMs);
+      function loadDone() { if (watchdog) clearTimeout(watchdog); }
+      // 第一次載入要等 getSettings（科目名稱等）也回來才畫——兩個請求同時送出、不排隊。
+      Promise.all([fetchPair(requestStore, requestMonth), settingsReady]).then(function (both) {
+        var results = both[0];
         loadDone();
         if (dashCache) dashCache.set(key, cacheEntry(results), tokenAtRequest, genAtRequest);
         if (seq !== loadSeq) return; // 使用者在回應回來前又切了一次，這筆回應已經過期
@@ -7197,6 +7491,12 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
         if (seq !== loadSeq) return;
         if (!document.body.contains(dashBody)) return;
         setRefreshing(false);
+        if (!cached && dashBody.getAttribute('data-skeleton')) {
+          clearSkeletonMarks();
+          dashBody.innerHTML = '';
+          var st = document.getElementById('monthStatus');
+          if (st) st.textContent = '';
+        }
         if (err && err.error === 'AUTH') {
           handleApiError(err);
           return;
@@ -7236,73 +7536,143 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       setTimeout(next, 300);
     }
 
-    function boot() {
-      var bootToken = window.PnlLoading ? window.PnlLoading.show(function () {
-        if (document.body.contains(dashBody)) showRetry('讀取太久，已解除畫面鎖定，請按重試', boot);
-      }) : null;
-      function bootDone() { if (bootToken !== null) window.PnlLoading.hide(bootToken); }
-      call('getSettings', {}).then(function (settings) {
-        App.accounts = settings.accounts || [];
-        if (settings.can_see_all !== undefined) {
-          canSeeAll = !!settings.can_see_all;
-          App.canSeeAll = canSeeAll;
-        }
-        var storeIds;
-        if (settings.stores) {
-          settings.stores.forEach(function (s) {
-            storeNameMap[s.store_id] = window.PnlStoreLabel ? window.PnlStoreLabel(s) : s.name;
-            storeMeta[s.store_id] = { name: s.name, brand: String(s.brand || '').trim(), unit_type: String(s.unit_type || '') };
-          });
-          storeIds = settings.stores.filter(function (s) { return s.active !== false; }).map(function (s) { return s.store_id; }); // 停用門市（例如剛載入、還沒啟用的集團單位）不列
-        } else {
-          storeIds = App.stores || [];
-        }
-        // 非管理者的 settings.stores 已經是後端依權限縮限過的清單；沒有
-        // settings.stores（舊後端）才退回登入時拿到的 App.stores。
-        var effectiveStoreIds = (canSeeAll || settings.stores) ? storeIds : (App.stores || []);
-        if (window.PnlTheme && settings.stores) window.PnlTheme.setStores(settings.stores);
-        buildStoreOptions(effectiveStoreIds);
-        buildMonthOptions();
+    // speed2：settingsReady＝這一頁的 getSettings（科目、門市）已經套用；load()
+    // 第一次畫面要等它（兩個請求同時送出）。之後一直是已完成的 promise。
+    var settingsReady = Promise.resolve();
 
+    // getSettings.stores（或記住的外殼門市清單）→ 門市名稱／品牌 meta，回傳這個
+    // 帳號在下拉要看到的門市 id（停用的不列）。
+    function applyStoreList(stores, fromBackend) {
+      storeNameMap = {};
+      storeMeta = {};
+      (stores || []).forEach(function (s) {
+        storeNameMap[s.store_id] = window.PnlStoreLabel ? window.PnlStoreLabel(s) : s.name;
+        storeMeta[s.store_id] = { name: s.name, brand: String(s.brand || '').trim(), unit_type: String(s.unit_type || '') };
+      });
+      if (window.PnlTheme && fromBackend) window.PnlTheme.setStores(stores || []);
+      return (stores || []).filter(function (s) { return s.active !== false; }).map(function (s) { return s.store_id; });
+    }
+
+    function applySettingsMeta(settings) {
+      App.accounts = settings.accounts || [];
+      if (settings.can_see_all !== undefined) {
+        canSeeAll = !!settings.can_see_all;
+        App.canSeeAll = canSeeAll;
+      }
+      // 非管理者的 settings.stores 已經是後端依權限縮限過的清單；沒有
+      // settings.stores（舊後端）才退回登入時拿到的 App.stores。
+      if (settings.stores) return applyStoreList(settings.stores, true);
+      return App.stores || [];
+    }
+
+    function currentOptionIds() {
+      return Array.prototype.map.call(storeSelect.options, function (o) { return o.value; });
+    }
+
+    // 下拉選單（門市＋月份）＋預設門市；preferStore 在選單裡就用它。回傳是否有門市。
+    function setupSelectors(storeIds, preferStore) {
+      buildStoreOptions(storeIds);
+      buildMonthOptions();
+      if (storeIds.length === 0) {
+        showNoStoreHint();
+        return false;
+      }
+      hideNoStoreHint();
+      var ids = currentOptionIds();
+      var defaultStore = canSeeAll ? 'ALL' : (storeIds[0] || 'ALL');
+      storeSelect.value = (preferStore && ids.indexOf(preferStore) !== -1) ? preferStore : defaultStore;
+      return true;
+    }
+
+    // 預設月份：上次選的（App.lastMonth，跟填資料共用；重新整理後來自外殼資料）→
+    // 否則問後端最近一個有資料的月份。
+    function pickMonth() {
+      var nowMonth = taipeiMonthNow();
+      if (App.lastMonth && monthOptions().indexOf(App.lastMonth) !== -1) {
+        return Promise.resolve(App.lastMonth);
+      }
+      var probeStore = storeSelect.value;
+      return call('getTrend', { store_id: probeStore, month: nowMonth, n: 12 }).then(function (probe) {
+        var isAllProbe = probeStore === 'ALL';
+        for (var i = probe.length - 1; i >= 0; i--) {
+          if (monthQualifiesAsDefault(probe[i], isAllProbe)) return probe[i].month;
+        }
+        return shiftMonthStr(nowMonth, -1);
+      }).catch(function (err) {
+        if (err && err.error === 'AUTH') throw err;
+        return shiftMonthStr(nowMonth, -1);
+      });
+    }
+
+    function bootError(err) {
+      if (err && err.__noStore) return;
+      if (err && err.error === 'AUTH') {
+        handleApiError(err);
+        return;
+      }
+      if (!document.body.contains(dashBody)) return;
+      if (dashBody.getAttribute('data-skeleton')) {
+        clearSkeletonMarks();
+        dashBody.innerHTML = '';
+        var st = document.getElementById('monthStatus');
+        if (st) st.textContent = '';
+      }
+      showRetry(errorMessage(err) || '載入失敗，請稍後再試', boot);
+    }
+
+    function boot() {
+      hideRetry();
+      renderSkeleton();
+      var tokenAtBoot = App.token;
+      var settingsP = window.PnlGetSettings ? window.PnlGetSettings() : call('getSettings', {});
+      settingsReady = settingsP.then(function () {}, function () {});
+      var shell = window.PnlShellCache ? window.PnlShellCache.get() : null;
+
+      if (shell && shell.stores && shell.stores.length) {
+        // speed2 快速路徑：用記住的外殼資料（非財務）立刻畫下拉選單、立刻送 getMonth／
+        // getTrend，跟 getSettings 同時跑；getSettings 回來以後端為準靜默更新。
+        if (shell.can_see_all !== undefined) canSeeAll = shell.can_see_all;
+        var cachedIds = applyStoreList(shell.stores, false);
+        if (!setupSelectors(cachedIds, shell.last_store)) cachedIds = [];
+        var monthP = cachedIds.length ? pickMonth().then(function (m) {
+          if (App.token !== tokenAtBoot || !document.body.contains(dashBody)) return;
+          monthSelect.value = m;
+          load();
+        }) : Promise.resolve();
+        monthP.catch(bootError);
+        settingsP.then(function (settings) {
+          if (App.token !== tokenAtBoot || !document.body.contains(dashBody)) return;
+          var prevCanSeeAll = canSeeAll;
+          var freshIds = applySettingsMeta(settings);
+          var sameList = canSeeAll === prevCanSeeAll && sameStringSet(freshIds, cachedIds) && freshIds.join('|') === cachedIds.join('|');
+          if (sameList) {
+            refreshStoreOptionLabels();
+            return;
+          }
+          // 權限／門市清單變了（例如被縮權、新增門市）：重建選單，原本選的還在就保留。
+          var prevStore = storeSelect.value;
+          var prevMonth = monthSelect.value;
+          if (!setupSelectors(freshIds, prevStore)) return;
+          if (prevMonth) monthSelect.value = prevMonth;
+          if (storeSelect.value !== prevStore || !cachedIds.length) {
+            if (monthSelect.value) load();
+            else pickMonth().then(function (m) { monthSelect.value = m; load(); }).catch(bootError);
+          }
+        }).catch(bootError);
+        return;
+      }
+
+      settingsP.then(function (settings) {
+        if (App.token !== tokenAtBoot) return Promise.reject({ __noStore: true });
+        var ids = applySettingsMeta(settings);
+        var effectiveStoreIds = (canSeeAll || settings.stores) ? ids : (App.stores || []);
         // Task B：系統尚未設定任何門市——顯示提示、停用篩選列與兩顆下載鈕，
         // 不要再往下打 getMonth/getTrend（一定會因為 store_id 缺漏/無效落空）。
-        if (effectiveStoreIds.length === 0) {
-          showNoStoreHint();
-          return Promise.reject({ __noStore: true });
-        }
-        hideNoStoreHint();
-
-        var defaultStore = canSeeAll ? 'ALL' : (effectiveStoreIds[0] || 'ALL');
-        storeSelect.value = defaultStore;
-
-        var nowMonth = taipeiMonthNow();
-        // Fable #61：儀表板與填資料共用 App.lastMonth——切頁回來沿用上次的月份，不跳回預設月。
-        if (App.lastMonth && monthOptions().indexOf(App.lastMonth) !== -1) {
-          monthSelect.value = App.lastMonth;
-          return null;
-        }
-        return call('getTrend', { store_id: defaultStore, month: nowMonth, n: 12 }).then(function (probe) {
-          var isAllProbe = defaultStore === 'ALL';
-          var found = null;
-          for (var i = probe.length - 1; i >= 0; i--) {
-            if (monthQualifiesAsDefault(probe[i], isAllProbe)) { found = probe[i].month; break; }
-          }
-          monthSelect.value = found || shiftMonthStr(nowMonth, -1);
-        }).catch(function () {
-          monthSelect.value = shiftMonthStr(nowMonth, -1);
-        });
+        if (!setupSelectors(effectiveStoreIds, null)) return Promise.reject({ __noStore: true });
+        return pickMonth().then(function (m) { monthSelect.value = m; });
       }).then(function () {
-        bootDone();
         load();
-      }).catch(function (err) {
-        bootDone();
-        if (err && err.__noStore) return; // 已經在上面處理過了，不是真的錯誤
-        if (err && err.error === 'AUTH') {
-          handleApiError(err);
-          return;
-        }
-        showRetry(errorMessage(err) || '載入失敗，請稍後再試', boot);
-      });
+      }).catch(bootError);
     }
 
     // Task B：門市下拉為空時的提示（跟 gas/settings.html 「建立上月草稿／
@@ -7315,6 +7685,7 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       downloadPnlCsvBtn.disabled = true;
       downloadEntriesCsvBtn.disabled = true;
       document.getElementById('downloadSelect').disabled = true;
+      clearSkeletonMarks();
       dashBody.innerHTML = '';
       document.getElementById('monthStatus').textContent = '';
     }
@@ -11057,6 +11428,35 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
             tr.appendChild(passTd);
 
             var actionTd = document.createElement('td');
+            // speed2：「登出所有裝置」——已存檔的既有帳號才有（新列／改名中的列還不存在
+            // 於後端）。換該帳號的 token 世代，他在每台裝置記住的登入立即失效；對自己
+            // 按＝本裝置也登出。
+            if (r._origName && !isRenamed) {
+              var revokeBtn = el('button', 'btn-small', '登出所有裝置');
+              revokeBtn.type = 'button';
+              revokeBtn.className = 'btn-small revoke-sessions-btn';
+              revokeBtn.setAttribute('data-user', r._origName);
+              revokeBtn.addEventListener('click', function () {
+                var who = r._origName;
+                var isSelf = who === App.name;
+                var msg = isSelf ? '要登出你自己在所有裝置上的登入嗎？（這台也會登出）' : '要登出「' + who + '」在所有裝置上的登入嗎？他下次要重新輸入通行碼。';
+                if (!window.confirm(msg)) return;
+                revokeBtn.disabled = true;
+                call('revokeSessions', { name: who }).then(function (data) {
+                  revokeBtn.disabled = false;
+                  if (data && data.self) {
+                    logout('已登出所有裝置，請重新登入');
+                    return;
+                  }
+                  showToast('已登出「' + who + '」的所有裝置');
+                }).catch(function (err) {
+                  revokeBtn.disabled = false;
+                  handleApiError(err);
+                });
+              });
+              actionTd.appendChild(revokeBtn);
+              actionTd.appendChild(document.createTextNode(' '));
+            }
             var delBtn = el('button', 'btn-danger', '移除');
             delBtn.type = 'button';
             delBtn.addEventListener('click', function () {
