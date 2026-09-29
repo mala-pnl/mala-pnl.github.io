@@ -9338,6 +9338,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           if (d.reason === 'PREV_NOT_FINAL') return acc + ' 上月未定稿，結轉未動';
           return acc + ' ' + d.action;
         });
+        (res.warnings || []).forEach(function (w) { lines.push(formatDraftWarning_(w)); });
         return lines.length ? head + '；' + lines.join('、') : head;
       }
 
@@ -9364,6 +9365,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       // ---- 建立草稿（可選月份） ----------------------------------------------
       function buildCreateDraftPanel() {
         var panel = el('div', 'settings-panel');
+        panel.id = 'createDraftPanel';
         panel.appendChild(el('div', 'settings-section-title', '建立草稿（可選月份）'));
 
         var activeStores = (state.data.stores || []).filter(function (s) { return s.active; });
@@ -9484,6 +9486,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       // 但月份列必須已經存在（通常是建過草稿之後）。
       function buildRefreshConnectorsPanel() {
         var panel = el('div', 'settings-panel');
+        panel.id = 'refreshConnectorsPanel';
         panel.appendChild(el('div', 'settings-section-title', '立即拉取本月連接器'));
         panel.appendChild(el('div', 'field-inline-error', '只重拉「連接器」取值方式的科目，手動填過的科目不會被覆蓋；調撥連接器建議在每個月定稿前重拉一次（單據可能後補簽收，數字會變動）。'));
 
