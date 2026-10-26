@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
-  <script>try { if (top !== self) { top.location = self.location; } } catch (e) { document.documentElement.style.display = "none"; }</script>
+  <script>try { if (top !== self) { var ok = false; try { var al = ["https://dzy.mozhuting.com"]; var o = (location.ancestorOrigins && location.ancestorOrigins.length) ? location.ancestorOrigins[0] : (document.referrer ? new URL(document.referrer).origin : ""); ok = new URLSearchParams(location.search).get("embed") === "dzy" && (al.indexOf(o) !== -1 || (function () { var u = new URL(o); var me = location.hostname; return (me === "localhost" || me === "127.0.0.1") && u.protocol === "http:" && (u.hostname === "localhost" || u.hostname === "127.0.0.1") && u.port !== "" && u.origin === o; })()); } catch (e2) { ok = false; } if (!ok) { top.location = self.location; } } } catch (e) { document.documentElement.style.display = "none"; }</script>
   <style>
   /* T07（#8）外殼樣式。手機優先（375px 起無橫向捲動），電腦（財務主管）加寬。
      品牌色預設用麻的小辛辣品牌紅，但 --brand 會在 getSettings 回來後由
@@ -2309,6 +2309,17 @@
   .skel-chart { width: 100%; height: 196px; }
   @media (max-width: 479px) { .skel-chart { height: 168px; } }
   .metric-row-skeleton .metric-title { color: var(--ink-soft); }
+  /* ---- dzy-embed（2026-10-24）：嵌在鼎兆元管理系統裡時，選單、頂列、登入者資訊
+     都由管理系統提供，這裡只留內容區（含進度條）。 ---- */
+  .pnl-embed .topbar,
+  .pnl-embed .sidebar,
+  .pnl-embed .sidebar-backdrop,
+  .pnl-embed .bottom-nav,
+  .pnl-embed .breadcrumb-bar { display: none !important; }
+  .pnl-embed .app-shell { min-height: 0; }
+  .pnl-embed .main { max-width: none; padding-top: 12px; }
+  .pnl-embed body.has-bottom-nav .main { padding-bottom: 40px; }
+  .embed-blocked { margin: 48px auto; max-width: 32em; padding: 16px 20px; border: 1px solid var(--line, #ddd); border-radius: 8px; color: var(--ink, #222); background: var(--card, #fff); line-height: 1.7; }
 </style>
 
 </head>
@@ -4245,8 +4256,10 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       var b = parseAuthBlob_(persistent ? localGet_(key) : storageGet(key));
       return b ? b.token : null;
     }
+    // dzy-embed：用 typeof 包起來，單獨抽出函式測試（test/ui 的 harness）時沒有 PNL_EMBED 也不會壞。
+    function isEmbed_() { return typeof PNL_EMBED !== 'undefined' && PNL_EMBED.on === true; }
     function saveAuthNow_(force) {
-      if (!App.token) return;
+      if (!App.token || isEmbed_()) return; // dzy-embed：嵌入時登入由管理系統負責，不存任何東西
       // 非登入當下只「更新自己那一顆」：儲存裡不是這把 token（別的分頁換人）或已經被移除
       // （別的分頁登出）都不寫——不能把已登出的登入寫回去。
       if (!force && storedToken_(rememberDevice) !== App.token) return;
@@ -4546,6 +4559,24 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       });
     }
 
+    // dzy-embed：只有 ?embed=dzy、真的在 iframe 裡、上層 origin 是管理系統正式網址才算嵌入；
+    // 本機開發（這頁自己跑在 localhost）另外放行 http://localhost:任意埠 的上層——正式網址上不放行本機上層。
+    var PNL_EMBED_ORIGINS = ['https://dzy.mozhuting.com'];
+    var PNL_EMBED_DEV_RE = /^http:\/\/(localhost|127\.0\.0\.1):\d{2,5}$/;
+    var PNL_EMBED = (function () {
+      var st = { on: false, origin: '', seq: 0, pending: {}, ready: false, wantPage: null, lastAt: null, timeoutMs: 70000 };
+      try {
+        if (new URLSearchParams(location.search).get('embed') !== 'dzy' || window.parent === window) return st;
+        var o = '';
+        if (location.ancestorOrigins && location.ancestorOrigins.length) o = location.ancestorOrigins[0];
+        else if (document.referrer) o = new URL(document.referrer).origin;
+        var selfLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+        if (PNL_EMBED_ORIGINS.indexOf(o) !== -1 || (selfLocal && PNL_EMBED_DEV_RE.test(o))) { st.on = true; st.origin = o; }
+      } catch (e) { /* 判斷不了就當一般頁面 */ }
+      return st;
+    })();
+    window.PnlEmbed = { on: PNL_EMBED.on };
+
     var App = window.App = {
       token: null,
       name: '',
@@ -4601,6 +4632,16 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
     function callTransport_(action, req) {
       var clientId = generateClientId();
       var payload = Object.assign({ action: action, token: App.token, client_id: clientId }, req || {});
+
+      if (isEmbed_()) {
+        var body = Object.assign({ client_id: clientId }, req || {});
+        delete body.token;
+        delete body.action;
+        return embedCall_(action, body).then(function (res) {
+          if (res && res.ok) return handleDedupIfNeeded(res.data);
+          throw (res && res.error) ? res : { error: 'BAD_INPUT', message: '系統錯誤，請稍後再試' };
+        });
+      }
 
       if (hasAppsScriptRunner()) {
         return new Promise(function (resolve, reject) {
@@ -5193,6 +5234,7 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
     // opts.keepStorage：別的分頁已經登出／換人（storage 事件）時，本分頁只回登入頁、
     // 不動儲存——儲存裡可能已經是另一個人剛登入的 token，清掉會把他也踢出去。
     function showLogin(message, opts) {
+      if (isEmbed_()) { showEmbedBlocked_(message); return; }
       if (!(opts && opts.keepStorage)) clearAuth_(); // speed2：登出／AUTH 失敗一律清掉 localStorage／sessionStorage 的登入與外殼資料
       App.shellCache = null;
       App.authSavedAt = null;
@@ -5886,6 +5928,7 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
     };
 
     function renderTabbar() {
+      embedNotifyAt_();
       var bar = document.getElementById('tabbar');
       var tabs = visibleTabs();
       bar.innerHTML = '';
@@ -6113,9 +6156,96 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
 
     // ---- 開機：有殘留 token 就試著直接進 App（getSettings 驗證 token 是否
     // 還有效；無效／過期會走 handleApiError → AUTH → showLogin）----
+    // ---- dzy-embed（2026-10-24）：嵌在鼎兆元管理系統裡（?embed=dzy）----
+    // 管理系統負責登入與權限：這頁不顯示登入、不存 token；每次呼叫後端都
+    // postMessage 給上層（dzy-pnl-call），由上層經 Mac mini 代轉回來
+    // （dzy-pnl-result）。上層用 dzy-pnl-nav 指定要顯示哪一頁。只接受
+    // 白名單 origin 的上層；不在白名單＝當一般頁面（防嵌入腳本會跳出）。
+    function embedCall_(action, body) {
+      return new Promise(function (resolve, reject) {
+        var id = 'c' + (++PNL_EMBED.seq) + '_' + Date.now();
+        var timer = setTimeout(function () {
+          delete PNL_EMBED.pending[id];
+          reject({ error: 'BUSY', message: '連線逾時，請稍後再試' });
+        }, PNL_EMBED.timeoutMs);
+        PNL_EMBED.pending[id] = function (res) { clearTimeout(timer); resolve(res); };
+        window.parent.postMessage({ type: 'dzy-pnl-call', v: 1, id: id, action: action, body: body }, PNL_EMBED.origin);
+      });
+    }
+    function onEmbedMessage_(ev) {
+      if (ev.source !== window.parent || ev.origin !== PNL_EMBED.origin) return;
+      var m = ev.data;
+      if (!m || m.v !== 1 || typeof m.type !== 'string') return;
+      if (m.type === 'dzy-pnl-result' && typeof m.id === 'string' && PNL_EMBED.pending[m.id]) {
+        var done = PNL_EMBED.pending[m.id];
+        delete PNL_EMBED.pending[m.id];
+        done(m.result);
+      } else if (m.type === 'dzy-pnl-nav' && typeof m.p === 'string') {
+        if (!PNL_EMBED.ready) { PNL_EMBED.wantPage = m.p; return; }
+        embedGo_(m.p);
+      }
+    }
+    // 頁頂分頁 id → 本頁的頁籤／填資料類別（id 與 dzy modules/pnl/bridge.js PNL_PAGES 一致）
+    function embedCurrentPage_() {
+      if (activeTabId === 'entry') return App.entryCategory || ENTRY_PENDING_KEY;
+      return activeTabId;
+    }
+    // 這頁自己切頁（填資料頁裡的類別膠囊、儀表板「前往填資料」）→ 告訴管理系統，讓頁頂分頁跟著亮。
+    function embedNotifyAt_() {
+      if (!isEmbed_() || !PNL_EMBED.ready) return;
+      var p = embedCurrentPage_();
+      if (p === PNL_EMBED.lastAt) return;
+      PNL_EMBED.lastAt = p;
+      window.parent.postMessage({ type: 'dzy-pnl-at', v: 1, p: p }, PNL_EMBED.origin);
+    }
+    function embedGo_(p) {
+      if (p === embedCurrentPage_()) { PNL_EMBED.lastAt = p; return; }   // 已經在這頁（多半是自己剛通知過管理系統）
+      if (p === 'dashboard' || p === 'import' || p === 'settings') {
+        if (visibleTabs().some(function (t) { return t.id === p; })) selectTab(p);
+        return;
+      }
+      if (p === ENTRY_PENDING_KEY || ENTRY_CATEGORIES.some(function (c) { return c.key === p; })) {
+        if (visibleTabs().some(function (t) { return t.id === 'entry'; })) selectEntryCategory(p);
+      }
+    }
+    function showEmbedBlocked_(message) {
+      renderShellDom();
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('registerScreen').classList.add('hidden');
+      document.getElementById('appShell').classList.add('hidden');
+      var box = document.getElementById('embedBlocked');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'embedBlocked';
+        box.className = 'embed-blocked';
+        document.getElementById('app').appendChild(box);
+      }
+      box.textContent = (message ? message + '　' : '') + '管理系統的登入已失效或沒有權限，請重新整理管理系統後再試。';
+    }
+    function bootEmbed_() {
+      document.documentElement.classList.add('pnl-embed');
+      window.addEventListener('message', onEmbedMessage_);
+      App.token = 'dzy-embed'; // 佔位：只給「途中換人」比對用，永遠不會送出
+      call('getSettings', {}).then(function (data) {
+        var me = data && data.me;
+        if (!me || typeof me.role !== 'string') { showEmbedBlocked_(''); return; }
+        App.name = me.name;
+        App.role = me.role;
+        App.stores = (data.stores || []).map(function (st) { return st.store_id; });
+        enterApp();
+        if (PNL_EMBED.wantPage) embedGo_(PNL_EMBED.wantPage);
+        PNL_EMBED.lastAt = embedCurrentPage_();
+        PNL_EMBED.ready = true;
+      }).catch(function (err) {
+        showEmbedBlocked_(err && err.message ? err.message : '');
+      });
+      window.parent.postMessage({ type: 'dzy-pnl-ready', v: 1 }, PNL_EMBED.origin);
+    }
+
     function boot() {
       renderShellDom();
       applyTheme_(); // store-theme：登入前就套用已知後端的品牌色（光復＝集團藍）
+      if (isEmbed_()) { bootEmbed_(); return; } // dzy-embed：登入交給管理系統
       // ?api= 格式錯誤是設定錯誤，不是「這次連線失敗」：整頁擋在登入畫面，
       // 不嘗試用任何殘留 token 或預設值繼續跑，避免帳務資料被送到一個看起來
       // 很像但其實打錯字／被竄改過的網址。
@@ -11228,7 +11358,7 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
       function renderUsersSection(panel) {
         panel.appendChild(el('div', 'settings-section-title', '使用者'));
         panel.appendChild(el('div', 'field-inline-error', '新增使用者或重設通行碼會產生 10 碼以上亂數通行碼，只會顯示一次；存檔後才會生效。'));
-        var scopeHint = el('div', 'field-hint', '可看門市：管理者一律全部。檢視者勾「全部門市」或全部不勾＝看全部門市與「全部合計」；勾選個別門市＝只看這幾家、看不到全部合計（就算勾滿每一家也一樣，要看合計請勾「全部門市」）。填寫者至少勾一家，一律看不到全部合計。');
+        var scopeHint = el('div', 'field-hint', '可看門市：管理者一律全部。檢視者勾「全部門市」或全部不勾＝看全部門市與「全部合計」；勾選個別門市＝只看這幾家、看不到全部合計（就算勾滿每一家也一樣，要看合計請勾「全部門市」）。填寫者至少勾一家；勾「全部門市」也看得到全部合計，勾個別門市則看不到。');
         scopeHint.id = 'usersScopeHint';
         panel.appendChild(scopeHint);
 
@@ -11270,6 +11400,9 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
           nameUpdaters = [];
           rows.forEach(function (r, idx) {
             var tr = document.createElement('tr');
+            // dzy-embed：管理系統同仁的影子帳號（管理系統:DZY070）——名稱、角色、通行碼、刪除都由管理系統決定，
+            // 這裡只能改可看門市（後端 saveUsersTable_ 同樣擋，畫面先鎖住免得存檔才被打回）。
+            var isShadow = !!r._origName && /^管理系統[:：]/.test(r._origName);
 
             var nameTd = document.createElement('td');
             var nameInput = document.createElement('input');
@@ -11308,6 +11441,7 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
               refreshAllNamePreviews();
             });
             updateNamePreview();
+            if (isShadow) { nameInput.disabled = true; nameHint.textContent = '管理系統的同仁帳號：角色與能不能進由管理系統的權限設定決定，這裡只能改可看門市'; }
             nameTd.appendChild(nameInput);
             nameTd.appendChild(nameHint);
             nameTd.appendChild(namePreview);
@@ -11328,6 +11462,7 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
               r.stores = [];
               renderRows();
             });
+            if (isShadow) roleSelect.disabled = true;
             roleTd.appendChild(roleSelect);
             tr.appendChild(roleTd);
 
@@ -11369,7 +11504,7 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
                   msgs.push('此檢視者目前只看得到：' + saved.join('、') + '（看不到全部合計）');
                 }
               }
-              if (r.role === '檢視者' && !allInput.checked && storeChecks.length &&
+              if ((r.role === '檢視者' || r.role === '填寫者') && !allInput.checked && storeChecks.length &&
                   storeChecks.every(function (sc) { return sc.cb.checked; })) {
                 msgs.push('要看全部合計請改勾「全部門市」');
               }
@@ -11424,14 +11559,19 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
                 showToast(errorMessage(err));
               });
             });
-            passTd.appendChild(genBtn);
+            if (isShadow) {
+              passTd.textContent = '';
+              passTd.appendChild(el('span', null, '由管理系統登入'));
+            } else {
+              passTd.appendChild(genBtn);
+            }
             tr.appendChild(passTd);
 
             var actionTd = document.createElement('td');
             // speed2：「登出所有裝置」——已存檔的既有帳號才有（新列／改名中的列還不存在
             // 於後端）。換該帳號的 token 世代，他在每台裝置記住的登入立即失效；對自己
             // 按＝本裝置也登出。
-            if (r._origName && !isRenamed) {
+            if (r._origName && !isRenamed && !isShadow) {
               var revokeBtn = el('button', 'btn-small', '登出所有裝置');
               revokeBtn.type = 'button';
               revokeBtn.className = 'btn-small revoke-sessions-btn';
@@ -11463,7 +11603,7 @@ window.PNL_BRAND_LOGOS = {"墨竹亭":"data:image/png;base64,iVBORw0KGgoAAAANSUh
               rows.splice(idx, 1);
               renderRows();
             });
-            actionTd.appendChild(delBtn);
+            if (!isShadow) actionTd.appendChild(delBtn);
             tr.appendChild(actionTd);
 
             tbody.appendChild(tr);
